@@ -1,0 +1,61 @@
+    .badge{display:inline-block;padding:.2rem .5rem;border-radius:999px;font-size:12px;border:1px solid #ddd}
+    
+    /* Status-specific styles */
+    .s-CANCELLED {
+      background-color: #007bff; /* Blue */
+    }
+    .s-BOOKED {
+      background-color: #6c757d; /* Gray */
+    }
+    .s-APPROVED {
+      background-color: #673ab7; /* Green */
+    }
+    .s-REJECTED {
+      background-color: #dc3545; /* Red */
+    }
+    .s-PENDING {
+      background-color: #ffc107; /* Yellow */
+      color: #212529;
+    }
+    .s-CANCELLED {
+      background-color: #007bff; /* Blue */
+    }
+    .s-CHECK-BY-DC {
+      background-color: #FFC107; /* Blue */
+    }
+    .s-REJECT-BY-DC {
+      background-color: #dc3545; /* Blue */
+    }
+    .s-PASS-BY-DC {
+      background-color: #78f634; /* Blue */
+      color: black;
+    }
+    .s-CHECKED {
+      background-color: #00BCD4; /* Blue */
+    }
+    .s-OBSOLETED {
+      background-color: #795548; /* Blue */
+    }
+    .s-REVISE {
+      background-color: #ff9800; /* Blue */
+    }
+    .s-NEW-REGISTRASI {
+      background-color: #2BA745; /* Blue */
+    }
+    .s-NEW-REVISE {
+      background-color: #ff9800; /* Blue */
+    }
+    .s-NEW-OBSOLETE {
+      background-color: #607d8b; /* Blue */
+    }
+    .s-ACTIVE {
+      background-color: #4caf50; /* Blue */
+    }
+    .s-ARCHIVED {
+      background-color: #9e9e9e; /* Blue */
+    }
+    .s-AVAILABLE {
+      background-color: #28a745; /* Gray */
+    }
+    .s-CREATED{background:#CCCCCC; color: black;}
+    .s-REQUESTED{background:#fff7e6}

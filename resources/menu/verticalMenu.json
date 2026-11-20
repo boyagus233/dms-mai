@@ -1,0 +1,231 @@
+{
+  "menu": [
+    {
+      "url": "/dashboard",
+      "name": "Home",
+      "icon": "menu-icon tf-icons ri-home-smile-line",
+      "slug": "dashboard",
+      "group": "dashboard",
+      "role": "EMP"
+    },
+    {
+      "menuHeader": "Reports",
+      "group": "",
+      "role": "EMP"
+    },
+    {
+      "name": "Report",
+      "icon": "menu-icon tf-icons ri-folder-chart-line",
+      "slug": "pages-account-settings",
+      "group": "Report",
+      "role": "EMP",
+      "submenu": [
+        {
+          "url": "#",
+          "name": "Monthly Report",
+          "slug": "monthly-report"
+        }
+      ]
+    },
+    {
+      "menuHeader": "Apps & Pages",
+      "group": "",
+      "role": "ADM"
+    },
+    {
+      "name": "Master Data",
+      "icon": "menu-icon tf-icons ri-server-line",
+      "slug": "master-data",
+      "group": "departement.index,position.index,employee.index",
+      "role": "ADM",
+      "submenu": [
+        {
+          "url": "departement",
+          "name": "Departement",
+          "slug": "departement.index"
+        },
+        {
+          "url": "position",
+          "name": "position",
+          "slug": "position.index"
+        },
+        {
+          "url": "employee",
+          "name": "Employee",
+          "slug": "employee.index"
+        }
+      ]
+    },
+    {
+      "name": "Document Setting",
+      "icon": "menu-icon tf-icons ri-file-copy-line",
+      "slug": "document-setting",
+      "group": "document-type.index,document-function.index,document-classification.index,document-level.index,document-form.index,document-eksternal-type.index,document-template.index",
+      "role": "ADM",
+      "submenu": [
+        {
+          "url": "document-type",
+          "name": "Document Type",
+          "slug": "document-type.index"
+        },
+        {
+          "url": "document-function",
+          "name": "Document Function",
+          "slug": "document-function.index"
+        },
+        {
+          "url": "document-classification",
+          "name": "Document Classification",
+          "slug": "document-classification.index"
+        },
+        {
+          "url": "document-level",
+          "name": "Document Level",
+          "slug": "document-level.index"
+        },
+        {
+          "url": "document-form",
+          "name": "Document Form",
+          "slug": "document-form.index"
+        },
+        {
+          "url": "document-eksternal-type",
+          "name": "Document Eksternal Type",
+          "slug": "document-eksternal-type.index"
+        },
+        {
+          "url": "document-template",
+          "name": "Document Template",
+          "slug": "document-template.index"
+        }
+      ]
+    },
+    {
+      "menuHeader": "Custom E-Signature",
+      "group": "",
+      "role": "EMP"
+    },
+    {
+      "name": "All Document Approval",
+      "icon": "menu-icon tf-icons ri-quill-pen-line",
+      "slug": "adhoc-document",
+      "group": "adhoc-document.index,adhoc-document.create,adhoc-document.show,adhoc-document.tagging,adhoc-document.review",
+      "role": "EMP",
+      "submenu": [
+        {
+          "url": "adhoc-document",
+          "name": "Dashboard & Dokumen",
+          "slug": "adhoc-document.index"
+        },
+        {
+          "url": "adhoc-document/create",
+          "name": "Upload & Request Sign",
+          "slug": "adhoc-document.create"
+        }
+      ]
+    },
+    {
+      "menuHeader": "Doc Control",
+      "group": "",
+      "role": "EMP"
+    },
+    {
+      "name": "Required Review Doc",
+      "icon": "menu-icon tf-icons ri-file-copy-line",
+      "slug": "document-upload",
+      "url": "document-upload?viewtype=required",
+      "group": "required",
+      "role": "EMP",
+      "badge": []
+    },
+    {
+      "name": "Book No Doc & Doc Upload",
+      "icon": "menu-icon tf-icons ri-picture-in-picture-exit-line",
+      "slug": "document-upload",
+      "url": "document-upload?viewtype=create",
+      "group": "create",
+      "role": "EMP"
+    },
+    {
+      "name": "Master List Document",
+      "icon": "menu-icon tf-icons ri-file-list-3-fill",
+      "slug": "document-master-list",
+      "url": "document-master-list?viewtype=approve",
+      "group": "approve",
+      "role": "EMP"
+    },
+    {
+      "name": "Obsolete Document",
+      "icon": "menu-icon tf-icons ri-file-list-3-fill",
+      "slug": "document-master-list",
+      "url": "document-master-list?viewtype=obsolete",
+      "group": "obsolete",
+      "role": "EMP"
+    },
+    {
+      "name": "Aknowledge",
+      "icon": "menu-icon tf-icons ri-folder-unknow-line",
+      "slug": "document-acknowledge.index",
+      "url": "document-acknowledge",
+      "group": "",
+      "role": "EMP",
+      "badge": []
+    },
+    {
+      "name": "Document Eksternal",
+      "icon": "menu-icon tf-icons ri-picture-in-picture-2-fill",
+      "slug": "document-eksternal.index",
+      "url": "document-eksternal",
+      "group": "",
+      "role": "EMP",
+      "badge": []
+    },
+    {
+      "menuHeader": "Document History",
+      "group": "",
+      "role": "EMP"
+    },
+    {
+      "name": "Compare Doc",
+      "icon": "menu-icon tf-icons ri-archive-stack-fill",
+      "slug": "document-master-list",
+      "url": "document-master-list?viewtype=alldata",
+      "group": "alldata",
+      "role": "EMP"
+    },
+    {
+      "name": "Audit Trail",
+      "icon": "menu-icon tf-icons ri-file-list-line",
+      "slug": "document-log.index",
+      "url": "document-log",
+      "group": "",
+      "role": "EMP"
+    },
+    {
+      "menuHeader": "System & Setting",
+      "group": "",
+      "role": "ADM"
+    },
+    {
+      "name": "User",
+      "icon": "menu-icon tf-icons ri-account-pin-box-line",
+      "slug": "users",
+      "group": "users.index,role.index",
+      "role": "ADM",
+      "submenu": [
+        {
+          "url": "users",
+          "name": "User Management",
+          "slug": "users.index",
+          "group": "users"
+        },
+        {
+          "url": "role",
+          "name": "Role",
+          "slug": "role.index",
+          "group": "users"
+        }
+      ]
+    }
+  ]
+}

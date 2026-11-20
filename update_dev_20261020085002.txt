@@ -1,0 +1,28 @@
+Updated: 2026-10-20 10:17:35
+
+Berikut adalah ringkasan kumulatif seluruh perubahan aktif (File Modified) yang telah dilakukan pada sistem:
+
+### A. Folder Controllers (app/Http/Controllers/)
+1. DocumentEksternalController.php: Perbaikan filter case-insensitive pada DataTables agar pencarian status "Obsolete" (huruf besar maupun kecil) memunculkan semua data yang sesuai.
+2. DocumentMasterListController.php:
+   - Perbaikan tab menu "Obsolete" agar memunculkan dokumen berstatus OBSOLETE (ditambahkan ke klausa IN).
+   - Perbaikan fitur "Dokumen Terkait" pada halaman detail agar hanya memunculkan dokumen yang masih Active (is_obsolete = 0 dan status = APPROVED).
+3. DocumentLogController.php: Pengubahan pengurutan (sorting) default Audit Trail menjadi data terbaru di atas (DESC), serta penambahan logika untuk menangani export ke format CSV via parameter URL.
+
+### B. Folder Views / UI (resources/views/content/)
+4. document-upload/add.blade.php: Penambahan fitur checkbox "Select All Departments" pada tag departemen beserta logika sinkronisasi Javascript-nya.
+5. document-log/index.blade.php: Penambahan saklar fitur "Exact Match" untuk pencarian spesifik nomor dokumen di tabel history, dan pengubahan fungsionalitas tombol download menjadi "Export All to CSV" dengan indikator loading.
+6. document-eksternal/view.blade.php: Perbaikan Javascript PDF Viewer agar file eksternal dapat terbuka dengan mulus. Ditambahkan pula validasi backend dan frontend (pesan error) apabila file fisik tidak ditemukan di server storage.
+7. document-eksternal/add.blade.php: Perbaikan tumpang tindih fungsi Javascript agar "Nama File" otomatis terisi di dalam textbox saat user menekan tombol Browse, serta migrasi dari FileReader ke createObjectURL untuk memuat pratinjau dokumen dengan lebih ringan.
+
+### C. Folder Exports (app/Exports/)
+8. AuditTrailListExport.php: Penghapusan implementasi `ShouldAutoSize` agar proses export puluhan ribu baris data tidak membebani memori server (mencegah timeout saat di-convert ke CSV).
+9. DocumentLogExport.php: Penyederhanaan pengembalian data collection agar eksekusi query log export lebih efisien.
+
+### D. Standalone Portal (public/)
+10. maintenance_portal.php: Standalone UI untuk Super Admin. Pembaruan terbaru:
+    - Menambahkan fitur Upload File manual untuk menyelesaikan isu Missing Files Check.
+    - Menambahkan menu Document Adjustment. Memiliki 2 tab (Internal dan Eksternal). Semua isian data yang dulunya manual (seperti Tipe Dokumen, Klasifikasi, Fungsi, Departemen, Karyawan Creator/Checker/Approver) kini diubah menjadi Dropdown/Select Option yang ditarik langsung dari master data database untuk meminimalisasi human error.
+    - Input text tetap dipertahankan hanya untuk isian yang spesifik dan unik (Nomor dokumen, Nama dokumen, Alasan revisi, dan Nama File).
+
+Note: Semua file routing (web.php) dan file konfigurasi sidebar (verticalMenu.json) tetap dalam kondisi orisinal.

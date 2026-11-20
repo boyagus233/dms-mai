@@ -1,0 +1,68 @@
+<IfModule mod_headers.c>
+    # CSP untuk development (sudah ada)
+    Header set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:;"
+    
+    # ===== TAMBAHKAN INI UNTUK PDF =====
+    
+    # CORS untuk local development
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+    
+    # Cache control untuk PDF
+    Header set Cache-Control "public, max-age=3600, must-revalidate"
+    
+    # Prevent MIME type sniffing
+    Header set X-Content-Type-Options "nosniff"
+</IfModule>
+
+<IfModule mod_mime.c>
+    # Pastikan MIME type PDF benar
+    AddType application/pdf .pdf
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    <IfModule mod_negotiation.c>
+        Options -MultiViews -Indexes
+    </IfModule>
+
+    RewriteEngine On
+
+    # Handle Authorization Header
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    # Redirect Trailing Slashes If Not A Folder...
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_URI} (.+)/$
+    RewriteRule ^ %1 [L,R=301]
+
+    # Send Requests To Front Controller...
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^ index.php [L]
+</IfModule>
+
+# ===== TAMBAHKAN INI UNTUK HANDLE PDF =====
+
+<FilesMatch "\.(pdf)$">
+    # Set header khusus untuk PDF
+    Header set Content-Type "application/pdf"
+    Header set Content-Disposition "inline"
+    Header set Accept-Ranges "bytes"
+    
+    # CORS untuk PDF
+    Header set Access-Control-Allow-Origin "*"
+    
+    # Cache
+    Header set Cache-Control "public, max-age=3600"
+</FilesMatch>
+
+# Optional: Jika ada masalah dengan file besar
+<IfModule mod_php.c>
+    # Untuk file besar
+    php_value upload_max_filesize 100M
+    php_value post_max_size 100M
+    php_value memory_limit 256M
+    php_value max_execution_time 300
+</IfModule>

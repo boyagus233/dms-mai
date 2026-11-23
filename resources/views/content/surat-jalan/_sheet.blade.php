@@ -42,6 +42,14 @@
   .sj-sign .slot .nm { text-align:center; font-weight:700; font-size:11.5px; padding:3px 4px 0; overflow-wrap:anywhere; }
   .sj-sign .slot .ps { text-align:center; font-size:10.5px; color:#444; }
   .sj-sign .slot .dt { text-align:center; font-size:10.5px; color:#444; padding-bottom:4px; }
+  .sj-sign .slot.is-signable { background:#f5f5ff; }
+  .sj-sign-btn { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; width:100%; height:100%;
+    border:2px dashed #696cff; border-radius:6px; background:#fff; color:#696cff; font-weight:600; font-size:12px; cursor:pointer;
+    transition:background .15s, color .15s; animation:sj-pulse 1.8s ease-in-out infinite; }
+  .sj-sign-btn i { font-size:24px; line-height:1; }
+  .sj-sign-btn:hover, .sj-sign-btn:focus-visible { background:#696cff; color:#fff; outline:none; animation:none; }
+  @keyframes sj-pulse { 0%,100% { box-shadow:0 0 0 0 rgba(105,108,255,.35); } 50% { box-shadow:0 0 0 5px rgba(105,108,255,0); } }
+  @media (prefers-reduced-motion: reduce) { .sj-sign-btn { animation:none; } }
   .sj-tagline { text-align:center; font-size:10px; font-style:italic; color:#444; margin-bottom:4px; }
   .sj-date { text-align:right; font-size:13px; margin-top:12px; }
   .sj-lembar { font-size:11px; margin-top:6px; }
@@ -124,7 +132,7 @@
     @php $slots = config('surat_jalan.slots'); @endphp
     @foreach (config('surat_jalan.slot_layout', array_keys($slots)) as $step)
       @php $slot = $slots[$step]; $signer = $sj->signerForStep($step); @endphp
-      <div class="slot" id="slot-{{ $step }}">
+      <div class="slot {{ ($signableStep ?? null) === $step ? 'is-signable' : '' }}" id="slot-{{ $step }}">
         <div class="ttl">{{ $slot['label'] }}</div>
         <div class="stamp">
           @if ($signer && $signer->isSigned())
@@ -135,6 +143,12 @@
             @endif
           @elseif ($signer && $signer->status === 'REJECTED')
             <span class="rej">REJECTED</span>
+          @elseif (($signableStep ?? null) === $step)
+            {{-- Giliran user yang login: tombol membuka pop-up tanda tangan --}}
+            <button type="button" class="sj-sign-btn" data-bs-toggle="modal" data-bs-target="#signModal">
+              <i class="ri-quill-pen-line"></i>
+              <span>Tanda tangan di sini</span>
+            </button>
           @elseif ($signer && $signer->status === 'PENDING')
             <span class="wait pending">Menunggu tanda tangan</span>
           @else

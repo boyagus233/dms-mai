@@ -11,9 +11,9 @@
                 <p class="text-muted mb-0">Kelola dan mintakan tanda tangan dokumen PDF apa saja secara dinamis.</p>
             </div>
             <div>
-                <a href="{{ route('adhoc-document.create') }}" class="btn btn-primary d-flex align-items-center gap-1">
+                <a href="{{ route('adhoc-document.create') }}" class="btn btn-primary d-flex align-items-center gap-1 shadow-sm">
                     <i class="ri-add-line fs-5"></i>
-                    <span>Upload &amp; Request Signature</span>
+                    <span>+ Create Dokumen</span>
                 </a>
             </div>
         </div>

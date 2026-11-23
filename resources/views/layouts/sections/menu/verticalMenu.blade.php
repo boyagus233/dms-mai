@@ -53,7 +53,7 @@
           $activeClass = 'active';
         }
       } else {
-        if ($currentRouteName === $menu->slug) {
+        if ($currentRouteName === $menu->slug || (is_string($menu->slug) && str_starts_with($currentRouteName, $menu->slug . '.')) || (isset($menu->group) && !empty($menu->group) && str_contains($menu->group, $currentRouteName))) {
           $activeClass = 'active';
         }
         elseif (isset($menu->submenu)) {

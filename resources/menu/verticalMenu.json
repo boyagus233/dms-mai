@@ -109,20 +109,9 @@
       "name": "All Document Approval",
       "icon": "menu-icon tf-icons ri-quill-pen-line",
       "slug": "adhoc-document",
-      "group": "adhoc-document.index,adhoc-document.create,adhoc-document.show,adhoc-document.tagging,adhoc-document.review",
-      "role": "EMP",
-      "submenu": [
-        {
-          "url": "adhoc-document",
-          "name": "Dashboard & Dokumen",
-          "slug": "adhoc-document.index"
-        },
-        {
-          "url": "adhoc-document/create",
-          "name": "Upload & Request Sign",
-          "slug": "adhoc-document.create"
-        }
-      ]
+      "url": "adhoc-document",
+      "group": "adhoc-document",
+      "role": "EMP"
     },
     {
       "menuHeader": "Doc Control",

@@ -7,13 +7,13 @@
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
-                <h4 class="fw-bold mb-1"><span class="text-muted fw-light">E-Signature /</span> All Document Approval</h4>
-                <p class="text-muted mb-0">Kelola dan mintakan tanda tangan dokumen PDF apa saja secara dinamis.</p>
+                <h4 class="fw-bold mb-1"><span class="text-muted fw-light"></span> All Document Approval</h4>
+         
             </div>
             <div>
                 <a href="{{ route('adhoc-document.create') }}" class="btn btn-primary d-flex align-items-center gap-1 shadow-sm">
                     <i class="ri-add-line fs-5"></i>
-                    <span>+ Create Dokumen</span>
+                    <span>Create Dokumen</span>
                 </a>
             </div>
         </div>

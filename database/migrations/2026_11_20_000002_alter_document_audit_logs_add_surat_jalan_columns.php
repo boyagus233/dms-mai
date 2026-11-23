@@ -20,14 +20,19 @@ return new class extends Migration
     public function up(): void
     {
         // 1. Drop FK constraint on document_id (MySQL auto-names it)
-        Schema::table('document_audit_logs', function (Blueprint $table) {
-            // Coba drop FK — nama constraint bervariasi antar environment.
-            try {
-                $table->dropForeign(['document_id']);
-            } catch (\Throwable $e) {
-                // FK sudah tidak ada atau nama berbeda — abaikan.
-            }
-        });
+        // try/catch di dalam closure Schema::table tidak berguna (perintah baru
+        // dieksekusi setelah closure selesai), jadi cek dulu FK yang benar-benar ada.
+        $fkNames = collect(Schema::getForeignKeys('document_audit_logs'))
+            ->filter(fn ($fk) => $fk['columns'] === ['document_id'])
+            ->pluck('name');
+
+        if ($fkNames->isNotEmpty()) {
+            Schema::table('document_audit_logs', function (Blueprint $table) use ($fkNames) {
+                foreach ($fkNames as $name) {
+                    $table->dropForeign($name);
+                }
+            });
+        }
 
         // 2. Tambah kolom baru bila belum ada
         Schema::table('document_audit_logs', function (Blueprint $table) {
@@ -46,10 +51,23 @@ return new class extends Migration
         DB::table('document_audit_logs')
             ->whereNull('document_type')
             ->update(['document_type' => 'ADHOC']);
+
+        // 4. Index untuk query per dokumen (document_type + document_id)
+        if (!Schema::hasIndex('document_audit_logs', 'idx_audit_doc')) {
+            Schema::table('document_audit_logs', function (Blueprint $table) {
+                $table->index(['document_type', 'document_id', 'created_at'], 'idx_audit_doc');
+            });
+        }
     }
 
     public function down(): void
     {
+        if (Schema::hasIndex('document_audit_logs', 'idx_audit_doc')) {
+            Schema::table('document_audit_logs', function (Blueprint $table) {
+                $table->dropIndex('idx_audit_doc');
+            });
+        }
+
         Schema::table('document_audit_logs', function (Blueprint $table) {
             if (Schema::hasColumn('document_audit_logs', 'metadata')) {
                 $table->dropColumn('metadata');

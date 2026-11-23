@@ -10,6 +10,8 @@ class AdhocDocument extends Model
 {
     use HasFactory;
 
+    public const DOCUMENT_TYPE = 'ADHOC';
+
     protected $table = 'documents';
 
     protected $fillable = [
@@ -60,7 +62,12 @@ class AdhocDocument extends Model
 
     public function auditLogs()
     {
-        return $this->hasMany(DocumentAuditLog::class, 'document_id')->orderBy('created_at', 'asc');
+        // document_audit_logs dipakai bersama beberapa modul (ADHOC, SURAT_JALAN, ...),
+        // jadi wajib difilter per document_type agar log modul lain dengan id sama tidak ikut.
+        return $this->hasMany(DocumentAuditLog::class, 'document_id')
+            ->where(fn ($q) => $q->where('document_type', self::DOCUMENT_TYPE)->orWhereNull('document_type'))
+            ->orderBy('created_at', 'asc')
+            ->orderBy('id', 'asc');
     }
 
     public function isCompleted(): bool

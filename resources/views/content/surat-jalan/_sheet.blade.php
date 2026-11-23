@@ -42,6 +42,10 @@
   .sj-sign .slot .nm { text-align:center; font-weight:700; font-size:11.5px; padding:3px 4px 0; overflow-wrap:anywhere; }
   .sj-sign .slot .ps { text-align:center; font-size:10.5px; color:#444; }
   .sj-sign .slot .dt { text-align:center; font-size:10.5px; color:#444; padding-bottom:4px; }
+  .sj-tagline { text-align:center; font-size:10px; font-style:italic; color:#444; margin-bottom:4px; }
+  .sj-date { text-align:right; font-size:13px; margin-top:12px; }
+  .sj-lembar { font-size:11px; margin-top:6px; }
+  .sj-lembar span { display:inline-block; width:62px; }
   .sj-foot { font-size:10px; color:#777; margin-top:8px; }
   @media (max-width: 767.98px) {
     .sj-sheet { padding:14px; }
@@ -60,13 +64,16 @@
     </div>
   @endif
 
+  @if (!empty($company['tagline']))
+    <div class="sj-tagline">{{ $company['tagline'] }}</div>
+  @endif
   <div class="sj-head">
     @if (is_file(public_path($company['logo'])))
       <img src="{{ asset($company['logo']) }}" alt="logo">
     @endif
     <div>
       <div class="co-name">{{ $company['name'] }}</div>
-      <div class="co-addr">{{ $company['address'] }}@if($company['phone'])&#10;Telp. {{ $company['phone'] }}@endif</div>
+      <div class="co-addr">{{ $company['address'] }}@if($company['phone'])&#10;Telp : {{ $company['phone'] }}@endif</div>
     </div>
   </div>
 
@@ -74,7 +81,6 @@
     <div class="left">
       <div class="sj-title">SURAT JALAN</div>
       <div class="sj-no">NO : {{ $sj->sj_no ?? '( DRAFT )' }}</div>
-      <div class="sj-field"><span>{{ $sj->location }}, {{ ($sj->sj_date ?? now())->format('d-m-Y') }}</span></div>
       <div class="sj-field"><span class="lbl">Kepada</span><span class="me-1">:</span>
         <span class="val">{{ $sj->kepada }}@if($sj->kepada_tipe) ({{ config('surat_jalan.kepada_tipe.' . $sj->kepada_tipe) }})@endif</span></div>
       <div class="sj-field"><span class="lbl">No. Kend</span><span class="me-1">:</span><span class="val">{{ $sj->no_kendaraan ?: '-' }}</span></div>
@@ -112,9 +118,12 @@
     </table>
   </div>
 
+  <div class="sj-date">{{ $sj->location }}, {{ ($sj->sj_date ?? now())->format('d-m-Y') }}</div>
+
   <div class="sj-sign">
-    @foreach (config('surat_jalan.slots') as $step => $slot)
-      @php $signer = $sj->signerForStep($step); @endphp
+    @php $slots = config('surat_jalan.slots'); @endphp
+    @foreach (config('surat_jalan.slot_layout', array_keys($slots)) as $step)
+      @php $slot = $slots[$step]; $signer = $sj->signerForStep($step); @endphp
       <div class="slot" id="slot-{{ $step }}">
         <div class="ttl">{{ $slot['label'] }}</div>
         <div class="stamp">
@@ -139,5 +148,11 @@
     @endforeach
   </div>
 
-  <div class="sj-foot">Dokumen elektronik — pengganti Lembar 1 (Pemilik Barang), Lembar 2 (Penerima), Lembar 3 (Security). Doc ID: {{ $sj->uuid }}</div>
+  <div class="sj-lembar">
+    @foreach (config('surat_jalan.lembar', []) as $lembar => $penerima)
+      <div><span>{{ $lembar }}</span>: {{ $penerima }}</div>
+    @endforeach
+  </div>
+
+  <div class="sj-foot">Dokumen elektronik — pengganti form Surat Jalan 3 rangkap. Doc ID: {{ $sj->uuid }}</div>
 </div>

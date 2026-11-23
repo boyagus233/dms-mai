@@ -4,12 +4,13 @@ return [
 
     /*
     | Identitas perusahaan pada kop PDF Surat Jalan.
-    | Lengkapi alamat sesuai kop form fisik (bisa juga lewat .env).
+    | Default mengikuti kop form fisik "Form Surat Jalan Keluar" (bisa di-override lewat .env).
     */
     'company' => [
+        'tagline' => env('SJ_COMPANY_TAGLINE', '"To the infinite development and harmony of the technology and human being"'),
         'name'    => env('SJ_COMPANY_NAME', 'PT. METALART ASTRA INDONESIA'),
-        'address' => env('SJ_COMPANY_ADDRESS', 'Karawang, Jawa Barat - Indonesia'),
-        'phone'   => env('SJ_COMPANY_PHONE', ''),
+        'address' => env('SJ_COMPANY_ADDRESS', "Kawasan Industri KIIC, Jl. Harapan III Lot-JJ2A, Desa Sirnabaya,\nKecamatan Teluk Jambe Timur, Karawang 41361 Jawa Barat"),
+        'phone'   => env('SJ_COMPANY_PHONE', '(021) 2936 9960, (0267) 7863 9862, Fax : (021) 2936 9965'),
         // path relatif dari folder public/
         'logo'    => env('SJ_COMPANY_LOGO', 'assets/img/surat-jalan/logo-metalart.png'),
     ],
@@ -49,6 +50,17 @@ return [
         2 => ['code' => 'MENGETAHUI', 'label' => 'Mengetahui', 'role' => 'Dept. Head'],
         3 => ['code' => 'PEMERIKSA',  'label' => 'Pemeriksa',  'role' => 'HRD / GA'],
         4 => ['code' => 'DITERIMA',   'label' => 'Diterima',   'role' => 'Penerima / Security'],
+    ],
+
+    // Urutan kotak dari kiri ke kanan pada lembar Surat Jalan (berisi nomor step),
+    // mengikuti template fisik: Pemeriksa | Mengetahui | Diserahkan | Diterima.
+    'slot_layout' => [3, 2, 1, 4],
+
+    // Keterangan distribusi lembar (dicetak di bawah kotak tanda tangan).
+    'lembar' => [
+        'Lembar 1' => 'Pemilik Barang',
+        'Lembar 2' => 'Penerima',
+        'Lembar 3' => 'Security',
     ],
 
     'satuan' => ['PCS', 'SET', 'UNIT', 'KG', 'BOX', 'LOT', 'ROLL', 'LEMBAR', 'METER', 'LITER', 'DUS', 'PALLET'],

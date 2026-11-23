@@ -5,41 +5,22 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Modul Surat Jalan (Online Sign Approval) + tabel audit log generik.
+ * Modul Surat Jalan (Online Sign Approval).
  *
- * Jalankan HANYA migration ini (beberapa migration lama berstatus Pending
- * padahal tabelnya sudah ada dari dump SQL):
+ * Tabel audit log (document_audit_logs) TIDAK dibuat di sini: tabel itu dibuat
+ * oleh migration Ad-Hoc (2026_11_20_000001) lalu diperluas untuk dipakai
+ * bersama oleh 2026_11_20_000002 (kolom document_type, actor_position, metadata).
+ *
+ * Bila beberapa migration lama berstatus Pending padahal tabelnya sudah ada
+ * dari dump SQL, jalankan per file:
  *   php artisan migrate --path=database/migrations/2026_11_19_000001_create_surat_jalan_tables.php
- *
- * Alternatif tanpa artisan (phpMyAdmin): database/sql/2026_11_19_surat_jalan.sql
+ *   php artisan migrate --path=database/migrations/2026_11_20_000001_create_adhoc_documents_tables.php
+ *   php artisan migrate --path=database/migrations/2026_11_20_000002_alter_document_audit_logs_add_surat_jalan_columns.php
  */
 return new class extends Migration
 {
     public function up(): void
     {
-        // Tabel audit log generik: dipakai Surat Jalan sekarang, dan modul
-        // Ad-Hoc Approval / Sertifikat Kalibrasi nanti (dibedakan oleh document_type).
-        if (!Schema::hasTable('document_audit_logs')) {
-            Schema::create('document_audit_logs', function (Blueprint $table) {
-                $table->id();
-                $table->string('document_type', 50);          // SURAT_JALAN, ADHOC, CALIBRATION, ...
-                $table->unsignedBigInteger('document_id');
-                $table->string('action', 50);                 // DOCUMENT_CREATED, APPROVED_SIGNED, ...
-                $table->string('description', 500)->nullable();
-                $table->unsignedBigInteger('user_id')->nullable();
-                $table->string('actor_name', 100)->nullable();
-                $table->string('actor_email', 100)->nullable();
-                $table->string('actor_position', 100)->nullable();
-                $table->string('ip_address', 45)->nullable();
-                $table->string('user_agent', 500)->nullable();
-                $table->json('metadata')->nullable();
-                $table->timestamp('created_at', 3)->useCurrent(); // presisi milidetik, tanpa updated_at (immutable)
-
-                $table->index(['document_type', 'document_id', 'created_at'], 'idx_audit_doc');
-                $table->index('user_id');
-            });
-        }
-
         Schema::create('trx_surat_jalan', function (Blueprint $table) {
             $table->id();
             $table->uuid('uuid')->unique();

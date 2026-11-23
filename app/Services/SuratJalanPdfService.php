@@ -20,7 +20,9 @@ class SuratJalanPdfService
     private const M_RIGHT = 12;
     private const CONTENT_W = 186;           // 210 - 12 - 12
     private const FOOTER_H = 14;             // area footer (catatan + nomor halaman)
-    private const SIG_H = 51;                // tinggi blok tanda tangan
+    private const DATE_H = 7;                // baris "Karawang, tanggal" di atas kotak TTD
+    private const LEMBAR_H = 12;             // keterangan Lembar 1/2/3 di bawah kotak TTD
+    private const SIG_H = 7 + 51 + 12;       // DATE_H + kotak tanda tangan + LEMBAR_H
     private const COLS = [12, 86, 28, 60];   // NO, JENIS BARANG, QTY, KETERANGAN
 
     public function __construct(private SuratJalanService $service)
@@ -36,7 +38,7 @@ class SuratJalanPdfService
         $sj->loadMissing(['items', 'signers', 'departement', 'creator']);
 
         $pdf = $this->newPdf('Surat Jalan ' . ($sj->sj_no ?? 'DRAFT'), sprintf(
-            'Dokumen elektronik %s — pengganti Lembar 1 (Pemilik Barang), Lembar 2 (Penerima), Lembar 3 (Security).  Doc ID: %s',
+            'Dokumen elektronik %s — pengganti form Surat Jalan 3 rangkap.  Doc ID: %s',
             config('app.name'), $sj->uuid
         ));
         $pdf->AddPage();
@@ -61,21 +63,30 @@ class SuratJalanPdfService
         $company = config('surat_jalan.company');
         $logo = public_path($company['logo']);
         $textX = self::M_LEFT;
-
-        if (is_file($logo)) {
-            $pdf->Image($logo, self::M_LEFT, 9, 26, 15, '', '', '', true, 300, '', false, false, 0, 'LM');
-            $textX = self::M_LEFT + 29;
-        }
+        $top = 8;
 
         $pdf->SetTextColor(20, 20, 20);
-        $pdf->SetFont('helvetica', 'B', 13);
-        $pdf->SetXY($textX, 10);
-        $pdf->Cell(0, 6, $company['name'], 0, 1);
-        $pdf->SetFont('helvetica', '', 8);
-        $pdf->SetX($textX);
-        $pdf->MultiCell(self::CONTENT_W - ($textX - self::M_LEFT), 4, trim($company['address'] . ($company['phone'] ? "\nTelp. " . $company['phone'] : '')), 0, 'L');
+        if (!empty($company['tagline'])) {
+            // Tagline kecil di atas kop, seperti form fisik
+            $pdf->SetFont('helvetica', 'I', 7);
+            $pdf->SetXY(self::M_LEFT, $top);
+            $pdf->Cell(self::CONTENT_W, 3.5, $company['tagline'], 0, 1, 'C');
+            $top += 4;
+        }
 
-        $lineY = max(26, $pdf->GetY() + 1.5);
+        if (is_file($logo)) {
+            $pdf->Image($logo, self::M_LEFT, $top + 1, 30, 15, '', '', '', true, 300, '', false, false, 0, 'LM');
+            $textX = self::M_LEFT + 33;
+        }
+
+        $pdf->SetFont('helvetica', 'B', 13);
+        $pdf->SetXY($textX, $top);
+        $pdf->Cell(0, 6, $company['name'], 0, 1);
+        $pdf->SetFont('helvetica', '', 7.5);
+        $pdf->SetX($textX);
+        $pdf->MultiCell(self::CONTENT_W - ($textX - self::M_LEFT), 3.5, trim($company['address'] . ($company['phone'] ? "\nTelp : " . $company['phone'] : '')), 0, 'L');
+
+        $lineY = max($top + 17, $pdf->GetY() + 1.5);
         $pdf->SetLineWidth(0.6);
         $pdf->Line(self::M_LEFT, $lineY, self::PAGE_W - self::M_RIGHT, $lineY);
         $pdf->SetLineWidth(0.2);
@@ -105,20 +116,14 @@ class SuratJalanPdfService
 
         // --- Data kiri
         $kepadaTipe = config('surat_jalan.kepada_tipe.' . $sj->kepada_tipe);
+        // Tanggal & lokasi dicetak di atas kotak tanda tangan (lihat drawSignatureBlock), seperti form fisik.
         $rows = [
-            [$sj->location . ', ' . ($sj->sj_date ? $sj->sj_date->format('d-m-Y') : now()->format('d-m-Y')), null],
             ['Kepada', $sj->kepada . ($kepadaTipe ? " ({$kepadaTipe})" : '')],
             ['No. Kend', $sj->no_kendaraan ?: '-'],
         ];
-        $ly = $y + 21;
+        $ly = $y + 22;
         foreach ($rows as [$label, $value]) {
             $pdf->SetXY(self::M_LEFT, $ly);
-            if ($value === null) {
-                $pdf->SetFont('helvetica', '', 9.5);
-                $pdf->Cell($leftW, 5.5, $label, 0, 1, 'L');
-                $ly += 6;
-                continue;
-            }
             $pdf->SetFont('helvetica', '', 9.5);
             $pdf->Cell(20, 5.5, $label, 0, 0, 'L');
             $pdf->Cell(4, 5.5, ':', 0, 0, 'L');
@@ -230,8 +235,17 @@ class SuratJalanPdfService
         $nameH = 6;
         $infoH = 5;
 
-        foreach (config('surat_jalan.slots') as $step => $slot) {
-            $x = self::M_LEFT + ($step - 1) * $w;
+        // "Karawang, dd-mm-yyyy" rata kanan di atas kotak tanda tangan (sesuai form fisik)
+        $pdf->SetFont('helvetica', '', 9.5);
+        $pdf->SetTextColor(20, 20, 20);
+        $pdf->SetXY(self::M_LEFT, $y);
+        $pdf->Cell(self::CONTENT_W, 6, $sj->location . ', ' . ($sj->sj_date ?? now())->format('d-m-Y'), 0, 0, 'R');
+        $y += self::DATE_H;
+
+        $slots = config('surat_jalan.slots');
+        foreach (array_values(config('surat_jalan.slot_layout', array_keys($slots))) as $col => $step) {
+            $slot = $slots[$step];
+            $x = self::M_LEFT + $col * $w;
             $signer = $sj->signerForStep($step);
 
             // Judul kotak
@@ -260,6 +274,16 @@ class SuratJalanPdfService
             $pdf->MultiCell($w, $infoH, $date, 'LRB', 'C', false, 0, $x, $ny + $nameH + $infoH, true, 0, false, true, $infoH, 'M', true);
         }
         $pdf->SetTextColor(20, 20, 20);
+
+        // Keterangan distribusi lembar (versi digital menggantikan 3 rangkap kertas)
+        $ly = $y + $labelH + $stampH + $nameH + 2 * $infoH + 1.5;
+        $pdf->SetFont('helvetica', '', 7.5);
+        foreach (config('surat_jalan.lembar', []) as $lembar => $penerima) {
+            $pdf->SetXY(self::M_LEFT, $ly);
+            $pdf->Cell(16, 3.4, $lembar, 0, 0, 'L');
+            $pdf->Cell(60, 3.4, ': ' . $penerima, 0, 0, 'L');
+            $ly += 3.4;
+        }
     }
 
     private function drawStamp(TCPDF $pdf, SuratJalan $sj, ?SuratJalanSigner $signer, float $x, float $y, float $w, float $h): void
@@ -315,9 +339,7 @@ class SuratJalanPdfService
             now()->format('d-m-Y H:i:s'), auth()->user()?->name ?? '-', $sj->uuid
         ));
         $pdf->AddPage();
-        $this->drawLetterhead($pdf);
-
-        $pdf->SetY(31);
+        $pdf->SetY($this->drawLetterhead($pdf) + 3);
         $pdf->SetFont('helvetica', 'B', 15);
         $pdf->Cell(0, 8, 'AUDIT HISTORY / CERTIFICATE OF COMPLETION', 0, 1, 'C');
         $pdf->SetFont('helvetica', '', 9);

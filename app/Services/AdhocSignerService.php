@@ -532,6 +532,7 @@ class AdhocSignerService
         $ua = $request ? substr($request->userAgent() ?? '', 0, 500) : substr(request()->userAgent() ?? '', 0, 500);
 
         DocumentAuditLog::create([
+            'document_type' => AdhocDocument::DOCUMENT_TYPE,
             'document_id' => $documentId,
             'user_id' => $userId,
             'actor_name' => $actorName,

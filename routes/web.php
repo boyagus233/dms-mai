@@ -26,6 +26,7 @@ use App\Http\Controllers\DocumentMasterListController;
 use App\Http\Controllers\DocumentEksternalController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\AdhocDocumentController;
+use App\Http\Controllers\SuratJalanController;
 
 Route::get('/', function () {
     return redirect()->route('login');
@@ -165,6 +166,24 @@ Route::middleware(['auth'])->group(function () {
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/search', [SearchController::class, 'search'])->name('search.data');
+});
+
+// Surat Jalan (Digitalisasi Form Barang Keluar + Online Sign Approval)
+Route::middleware(['auth'])->prefix('surat-jalan')->name('surat-jalan.')->controller(SuratJalanController::class)->group(function () {
+    Route::get('/', 'index')->name('index');
+    Route::get('/data', 'data')->name('data');
+    Route::get('/create', 'create')->name('create');
+    Route::post('/', 'store')->name('store');
+    Route::get('/{suratJalan}', 'show')->name('show');
+    Route::get('/{suratJalan}/edit', 'edit')->name('edit');
+    Route::put('/{suratJalan}', 'update')->name('update');
+    Route::delete('/{suratJalan}', 'destroy')->name('destroy');
+    Route::post('/{suratJalan}/submit', 'submit')->name('submit');
+    Route::post('/{suratJalan}/approve', 'approve')->name('approve');
+    Route::post('/{suratJalan}/reject', 'reject')->name('reject');
+    Route::get('/{suratJalan}/pdf', 'pdf')->name('pdf');
+    Route::get('/{suratJalan}/audit-history/export', 'auditHistory')->name('audit-history');
+    Route::get('/{suratJalan}/stamp/{step}', 'stamp')->whereNumber('step')->name('stamp');
 });
 
 Route::get('/speedtest', function () {

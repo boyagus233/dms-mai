@@ -114,6 +114,25 @@
       "role": "EMP"
     },
     {
+      "name": "Surat Jalan",
+      "icon": "menu-icon tf-icons ri-truck-line",
+      "slug": "surat-jalan",
+      "group": "surat-jalan.index,surat-jalan.create,surat-jalan.show,surat-jalan.edit",
+      "role": "EMP",
+      "submenu": [
+        {
+          "url": "surat-jalan",
+          "name": "Dashboard",
+          "slug": "surat-jalan.index"
+        },
+        {
+          "url": "surat-jalan/create",
+          "name": "Buat Surat Jalan",
+          "slug": "surat-jalan.create"
+        }
+      ]
+    },
+    {
       "menuHeader": "Doc Control",
       "group": "",
       "role": "EMP"

@@ -226,18 +226,48 @@ class AdhocDocumentController extends Controller
     }
 
     /**
-     * Document Detail & Monitoring Page
+     * Document Detail & Monitoring Page (Interactive Visual Sign & Audit Trail)
      */
     public function show(string $uuid)
     {
         $document = AdhocDocument::where('uuid', $uuid)
-            ->with(['creator', 'signers.user.employee.positions', 'fields', 'auditLogs'])
+            ->with(['creator', 'signers.user.employee.positions', 'fields.signer.user', 'auditLogs'])
             ->firstOrFail();
 
         $user = Auth::user();
         $mySignerRecord = $document->signers->firstWhere('user_id', $user->id);
+        $myFields = $mySignerRecord ? $document->fields->where('document_signer_id', $mySignerRecord->id)->values() : collect();
+        $existingSignatureUrl = $this->signerService->getUserSignatureImageUrl($user->id);
 
-        return view('content.adhoc-document.show', compact('document', 'mySignerRecord'));
+        $fieldsData = $document->fields->map(function ($f) use ($user, $mySignerRecord, $document) {
+            $signer = $f->signer;
+            $isMyField = $signer && $signer->user_id === $user->id;
+            $isMyTurn = $isMyField && $mySignerRecord && $mySignerRecord->status === 'PENDING' && $document->status === 'IN_PROGRESS';
+
+            return [
+                'id' => $f->id,
+                'field_type' => $f->field_type,
+                'page_number' => (int) $f->page_number,
+                'x_percent' => (float) $f->x_percent,
+                'y_percent' => (float) $f->y_percent,
+                'width_percent' => (float) $f->width_percent,
+                'height_percent' => (float) $f->height_percent,
+                'signer_id' => $f->document_signer_id,
+                'signer_name' => $signer?->user?->name ?? 'Signer',
+                'signer_role' => $signer?->role_name ?: 'Signer',
+                'signer_status' => $signer?->status ?? 'WAITING',
+                'is_my_field' => $isMyField,
+                'is_my_turn' => $isMyTurn,
+            ];
+        });
+
+        return view('content.adhoc-document.show', compact(
+            'document',
+            'mySignerRecord',
+            'myFields',
+            'existingSignatureUrl',
+            'fieldsData'
+        ));
     }
 
     /**
@@ -370,25 +400,52 @@ class AdhocDocumentController extends Controller
     }
 
     /**
-     * Button 2: On-Demand Certificate of Completion (Audit History PDF)
+     * Export Audit Trail Log as CSV (Audit history log format like Audit Trail)
+     */
+    public function exportAuditCsv(string $uuid)
+    {
+        $document = AdhocDocument::where('uuid', $uuid)->with('auditLogs')->firstOrFail();
+        $safeTitle = preg_replace('/[^A-Za-z0-9_-]/', '_', $document->title);
+        $fileName = 'Audit_Trail_' . $safeTitle . '_' . date('Ymd_His') . '.csv';
+
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0',
+        ];
+
+        $callback = function () use ($document) {
+            $file = fopen('php://output', 'w');
+            // UTF-8 BOM for Microsoft Excel compatibility
+            fprintf($file, chr(0xEF) . chr(0xBB) . chr(0xBF));
+            // Standard Audit Trail CSV Headings
+            fputcsv($file, ['Document Name', 'Created At', 'Created By', 'Email', 'Action', 'IP Address', 'Notes']);
+
+            foreach ($document->auditLogs as $log) {
+                fputcsv($file, [
+                    $document->title,
+                    $log->created_at ? $log->created_at->format('Y-m-d H:i:s') : '-',
+                    $log->actor_name,
+                    $log->actor_email ?: '-',
+                    $log->action,
+                    $log->ip_address ?: '-',
+                    $log->description ?: '-',
+                ]);
+            }
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    /**
+     * Download Audit History alias (Streams CSV log format directly instead of PDF certificate)
      */
     public function downloadAuditHistory(string $uuid)
     {
-        $document = AdhocDocument::where('uuid', $uuid)->firstOrFail();
-
-        try {
-            $pdfContent = $this->signerService->generateAuditCertificatePdf($document);
-            $fileName = 'Certificate_of_Completion_' . $document->uuid . '.pdf';
-
-            return response($pdfContent, 200, [
-                'Content-Type' => 'application/pdf',
-                'Content-Disposition' => 'inline; filename="' . $fileName . '"',
-            ]);
-        } catch (Exception $e) {
-            Log::error('Audit certificate generation failed: ' . $e->getMessage());
-            Alert::error('Gagal Mengunduh Sertifikat', $e->getMessage());
-            return redirect()->back();
-        }
+        return $this->exportAuditCsv($uuid);
     }
 
     /**

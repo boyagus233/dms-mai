@@ -94,8 +94,8 @@
                                         @endif
 
                                         @if($doc->status !== 'DRAFT')
-                                        <a href="{{ route('adhoc-document.download-audit-history', ['uuid' => $doc->uuid]) }}" target="_blank" class="btn btn-sm btn-icon btn-outline-info" title="Download Certificate of Completion">
-                                            <i class="ri-shield-check-line"></i>
+                                        <a href="{{ route('adhoc-document.export-audit-csv', ['uuid' => $doc->uuid]) }}" class="btn btn-sm btn-icon btn-outline-info" title="Download Audit Log (CSV)">
+                                            <i class="ri-file-list-line"></i>
                                         </a>
                                         @endif
                                     </div>

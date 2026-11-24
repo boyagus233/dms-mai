@@ -3,7 +3,8 @@
 namespace Database\Seeders;
 
 use App\Models\AlatUkur;
-use Carbon\Carbon;
+use App\Models\Kalibrasi;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\File;
 
@@ -14,8 +15,11 @@ class AlatUkurSeeder extends Seeder
      */
     public function run(): void
     {
-        $jsonPath = database_path('seeders/data/alat_ukur.json');
+        $defaultUser = User::first();
+        $defaultUserId = $defaultUser ? $defaultUser->id : 1;
 
+        // 1. Seed Master Alat Ukur (598 alat ukur data real)
+        $jsonPath = database_path('seeders/data/alat_ukur.json');
         if (!File::exists($jsonPath)) {
             $this->command->error("File alat_ukur.json tidak ditemukan di {$jsonPath}");
             return;
@@ -42,17 +46,57 @@ class AlatUkurSeeder extends Seeder
                     'calibrator_ref'              => $item['calibrator_ref'] ?? null,
                     'location'                    => $item['location'] ?? 'QA',
                     'calibration_interval_months' => $item['calibration_interval_months'] ?? 12,
-                    'last_calibration_date'       => null,
-                    'next_calibration_date'       => Carbon::today()->toDateString(),
-                    'current_status'              => 'ACTIVE',
+                    'last_calibration_date'       => $item['last_calibration_date'] ?? null,
+                    'next_calibration_date'       => $item['next_calibration_date'],
+                    'current_status'              => $item['current_status'] ?? 'ACTIVE',
                     'photo_path'                  => $item['photo_path'] ?? null,
                     'notes'                       => $item['notes'] ?? null,
-                    'created_by'                  => 1,
+                    'created_by'                  => $defaultUserId,
                 ]
             );
             $count++;
         }
 
         $this->command->info("Berhasil mengimpor {$count} alat ukur ke tabel m_alat_ukur.");
+
+        // 2. Seed Riwayat Transaksi Kalibrasi (1.302 transaksi data real)
+        $transPath = database_path('seeders/data/riwayat_kalibrasi.json');
+        if (File::exists($transPath)) {
+            $transJson = File::get($transPath);
+            $transData = json_decode($transJson, true);
+
+            if (is_array($transData)) {
+                $toolsByCode = AlatUkur::pluck('id', 'asset_code');
+                $transCount = 0;
+
+                foreach ($transData as $t) {
+                    $toolId = $toolsByCode[$t['asset_code']] ?? null;
+                    if (!$toolId) {
+                        continue;
+                    }
+
+                    Kalibrasi::updateOrCreate(
+                        ['certificate_number' => $t['certificate_number']],
+                        [
+                            'alat_ukur_id'       => $toolId,
+                            'calibration_type'   => $t['calibration_type'] ?? 'INTERNAL',
+                            'calibration_date'   => $t['calibration_date'],
+                            'next_due_date'      => $t['next_due_date'],
+                            'conclusion'         => $t['conclusion'] ?? 'PASS',
+                            'technician_id'      => $defaultUserId,
+                            'approver_id'        => $defaultUserId,
+                            'vendor_name'        => $t['vendor_name'] ?? null,
+                            'calibrator_used'    => $t['calibrator_used'] ?? null,
+                            'status'             => $t['status'] ?? 'COMPLETED',
+                            'approved_at'        => $t['approved_at'],
+                            'created_by'         => $defaultUserId,
+                        ]
+                    );
+                    $transCount++;
+                }
+
+                $this->command->info("Berhasil mengimpor {$transCount} riwayat kalibrasi ke tabel t_kalibrasi.");
+            }
+        }
     }
 }

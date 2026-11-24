@@ -366,4 +366,3 @@ Route::middleware(['auth'])->get('/documents/{uuid}/review', function ($uuid) {
 Route::middleware(['auth'])->get('/documents/{uuid}/audit-history/export', function ($uuid) {
     return redirect()->route('adhoc-document.download-audit-history', ['uuid' => $uuid]);
 });
-

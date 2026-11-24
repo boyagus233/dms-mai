@@ -55,7 +55,7 @@
           "slug": "employee.index"
         },
         {
-          "url": "vendor",
+          "url": "master-vendor",
           "name": "Vendor",
           "slug": "vendor.index"
         }

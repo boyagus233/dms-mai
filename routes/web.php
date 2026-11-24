@@ -150,8 +150,10 @@ Route::middleware(['auth'])->group(function () {
 });
 
 Route::middleware(['auth'])->group(function () {
-    Route::get('/vendor/export', [VendorController::class, 'export'])->name('vendor.export');
-    Route::resource('vendor', VendorController::class);
+    Route::redirect('/vendor', '/master-vendor');
+    Route::get('/master-vendor/export', [VendorController::class, 'export'])->name('vendor.export');
+    Route::resource('master-vendor', VendorController::class)->names('vendor')->parameters(['master-vendor' => 'vendor']);
+    Route::get('/vendors', [VendorController::class, 'index'])->name('vendor.alias');
 });
 
 Route::middleware(['auth'])->group(function () {

@@ -252,9 +252,7 @@ class AdhocDocumentController extends Controller
 
             $signatureUrl = null;
             if ($signer && $signer->status === 'SIGNED' && !empty($signer->signature_path)) {
-                if (Storage::disk('public')->exists('signature/' . $signer->signature_path)) {
-                    $signatureUrl = asset('storage/signature/' . $signer->signature_path);
-                }
+                $signatureUrl = route('adhoc-document.signature-image', ['uuid' => $document->uuid, 'signerId' => $signer->id]);
             }
 
             return [
@@ -349,9 +347,7 @@ class AdhocDocumentController extends Controller
 
             $signatureUrl = null;
             if ($fSigner && $fSigner->status === 'SIGNED' && !empty($fSigner->signature_path)) {
-                if (Storage::disk('public')->exists('signature/' . $fSigner->signature_path)) {
-                    $signatureUrl = asset('storage/signature/' . $fSigner->signature_path);
-                }
+                $signatureUrl = route('adhoc-document.signature-image', ['uuid' => $document->uuid, 'signerId' => $fSigner->id]);
             }
 
             return [
@@ -524,6 +520,33 @@ class AdhocDocumentController extends Controller
         return response()->file($fullPath, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="' . basename($fullPath) . '"',
+        ]);
+    }
+
+    /**
+     * Stream signer signature graphic safely
+     */
+    public function signatureImage(string $uuid, int $signerId)
+    {
+        $document = AdhocDocument::where('uuid', $uuid)->firstOrFail();
+        $signer = $document->signers()->findOrFail($signerId);
+
+        if (empty($signer->signature_path)) {
+            abort(404, 'Tanda tangan tidak ditemukan.');
+        }
+
+        $path = storage_path('app/public/signature/' . $signer->signature_path);
+        if (!file_exists($path)) {
+            $path = public_path('storage/signature/' . $signer->signature_path);
+        }
+
+        if (!file_exists($path)) {
+            abort(404, 'File tanda tangan tidak ditemukan.');
+        }
+
+        return response()->file($path, [
+            'Content-Type' => 'image/png',
+            'Cache-Control' => 'public, max-age=86400',
         ]);
     }
 }

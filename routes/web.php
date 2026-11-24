@@ -330,6 +330,7 @@ Route::middleware(['auth'])->prefix('adhoc-document')->name('adhoc-document.')->
     Route::get('/{uuid}/download-signed', [AdhocDocumentController::class, 'downloadSigned'])->name('download-signed');
     Route::get('/{uuid}/download-audit-history', [AdhocDocumentController::class, 'downloadAuditHistory'])->name('download-audit-history');
     Route::get('/{uuid}/export-audit-csv', [AdhocDocumentController::class, 'exportAuditCsv'])->name('export-audit-csv');
+    Route::get('/{uuid}/signature/{signerId}', [AdhocDocumentController::class, 'signatureImage'])->name('signature-image');
     Route::get('/{uuid}/view-pdf', [AdhocDocumentController::class, 'viewPdf'])->name('view-pdf');
 });
 

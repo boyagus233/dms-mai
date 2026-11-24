@@ -508,6 +508,12 @@ class AdhocSignerService
             $filename = time() . '_' . Str::random(12) . '.' . $type;
             file_put_contents($sigDir . '/' . $filename, $decoded);
 
+            // Also mirror to public/storage/signature if it exists as a directory (Windows symlink fallback)
+            $publicSigDir = public_path('storage/signature');
+            if (is_dir($publicSigDir)) {
+                @file_put_contents($publicSigDir . '/' . $filename, $decoded);
+            }
+
             // Update user & employee records
             $user->signature = $filename;
             $user->save();

@@ -72,7 +72,7 @@
               <label class="form-label fw-semibold" for="next_due_date">Tanggal Kalibrasi Ulang Berikutnya (Next Due) <span class="text-danger">*</span></label>
               <input type="date" class="form-control @error('next_due_date') is-invalid @enderror" 
                      id="next_due_date" name="next_due_date" value="{{ old('next_due_date', $defaultNextDue) }}" required />
-              <small class="text-muted">Otomatis dihitung +1 tahun (12 bulan) untuk reminder jadwal berikutnya.</small>
+              <small class="text-muted">Bisa diubah manual sesuai tanggal sertifikat vendor (disarankan +1 tahun).</small>
               @error('next_due_date')
                 <div class="invalid-feedback">{{ $message }}</div>
               @enderror

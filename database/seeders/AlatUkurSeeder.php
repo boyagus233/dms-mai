@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\AlatUkur;
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\File;
 
@@ -41,9 +42,9 @@ class AlatUkurSeeder extends Seeder
                     'calibrator_ref'              => $item['calibrator_ref'] ?? null,
                     'location'                    => $item['location'] ?? 'QA',
                     'calibration_interval_months' => $item['calibration_interval_months'] ?? 12,
-                    'last_calibration_date'       => $item['last_calibration_date'] ?? null,
-                    'next_calibration_date'       => $item['next_calibration_date'],
-                    'current_status'              => $item['current_status'] ?? 'ACTIVE',
+                    'last_calibration_date'       => null,
+                    'next_calibration_date'       => Carbon::today()->toDateString(),
+                    'current_status'              => 'ACTIVE',
                     'photo_path'                  => $item['photo_path'] ?? null,
                     'notes'                       => $item['notes'] ?? null,
                     'created_by'                  => 1,

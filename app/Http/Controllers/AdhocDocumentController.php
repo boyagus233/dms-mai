@@ -282,7 +282,7 @@ class AdhocDocumentController extends Controller
     public function review(string $uuid, Request $request)
     {
         $document = AdhocDocument::where('uuid', $uuid)
-            ->with(['creator', 'signers.user.employee.positions', 'fields'])
+            ->with(['creator', 'signers.user.employee.positions', 'fields.signer.user'])
             ->firstOrFail();
 
         $user = Auth::user();
@@ -330,9 +330,32 @@ class AdhocDocumentController extends Controller
         }
 
         // Fields assigned specifically to this signer
-        $myFields = $document->fields->where('document_signer_id', $signer->id);
+        $myFields = $document->fields->where('document_signer_id', $signer->id)->values();
 
-        return view('content.adhoc-document.review', compact('document', 'signer', 'myFields', 'existingSignatureUrl'));
+        // Prepare fields JSON for frontend PDF tag overlay
+        $fieldsData = $document->fields->map(function ($f) use ($user, $signer, $document) {
+            $fSigner = $f->signer;
+            $isMyField = $f->document_signer_id == $signer->id;
+            $isMyTurn = $isMyField && $signer->status === 'PENDING' && $document->status === 'IN_PROGRESS';
+
+            return [
+                'id' => $f->id,
+                'field_type' => $f->field_type,
+                'page_number' => (int) $f->page_number,
+                'x_percent' => (float) $f->x_percent,
+                'y_percent' => (float) $f->y_percent,
+                'width_percent' => (float) $f->width_percent,
+                'height_percent' => (float) $f->height_percent,
+                'signer_id' => $f->document_signer_id,
+                'signer_name' => $fSigner?->user?->name ?? 'Signer',
+                'signer_role' => $fSigner?->role_name ?: 'Signer',
+                'signer_status' => $fSigner?->status ?? 'WAITING',
+                'is_my_field' => $isMyField,
+                'is_my_turn' => $isMyTurn,
+            ];
+        });
+
+        return view('content.adhoc-document.review', compact('document', 'signer', 'myFields', 'existingSignatureUrl', 'fieldsData'));
     }
 
     /**

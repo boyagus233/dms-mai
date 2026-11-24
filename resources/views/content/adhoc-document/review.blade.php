@@ -4,10 +4,109 @@
 
 @section('styles')
 <style>
+    /* Tagging Overlay & PDF Viewer Styles */
+    .pdf-preview-container {
+        position: relative;
+        background: #474b4e;
+        padding: 16px;
+        border-radius: 8px;
+        min-height: 650px;
+        overflow: auto;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+    }
+    .pdf-canvas-wrapper {
+        position: relative;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+        background: #ffffff;
+        user-select: none;
+        display: inline-block;
+    }
+    #pdf-canvas {
+        display: block;
+        max-width: 100%;
+        height: auto;
+    }
+    .tags-overlay-layer {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+    }
+
+    /* Tag Boxes */
+    .preview-tag-box {
+        position: absolute;
+        box-sizing: border-box;
+        border-radius: 6px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 4px;
+        z-index: 10;
+        transition: all 0.2s ease-in-out;
+        pointer-events: auto;
+        user-select: none;
+        overflow: hidden;
+    }
+
+    /* Tag Status: Already Signed */
+    .preview-tag-box.signed {
+        border: 2px solid #28a745;
+        background: rgba(40, 167, 69, 0.12);
+        color: #1e7e34;
+    }
+
+    /* Tag Status: Waiting / Other Signers */
+    .preview-tag-box.waiting {
+        border: 2px dashed #6c757d;
+        background: rgba(108, 117, 125, 0.08);
+        color: #495057;
+    }
+
+    /* Tag Status: ACTIVE SIGN FOR CURRENT USER (Click-to-sign) */
+    .preview-tag-box.my-active-sign {
+        border: 2.5px solid #696cff;
+        background: rgba(105, 108, 255, 0.18);
+        color: #5659e6;
+        cursor: pointer;
+        box-shadow: 0 0 0 0 rgba(105, 108, 255, 0.7);
+        animation: pulse-glow 1.8s infinite;
+    }
+
+    .preview-tag-box.my-active-sign:hover {
+        border-color: #28a745;
+        background: rgba(40, 167, 69, 0.25);
+        color: #155724;
+        transform: scale(1.03);
+        box-shadow: 0 6px 18px rgba(40, 167, 69, 0.4);
+    }
+
+    @keyframes pulse-glow {
+        0% {
+            box-shadow: 0 0 0 0 rgba(105, 108, 255, 0.7);
+            border-color: #696cff;
+        }
+        50% {
+            box-shadow: 0 0 0 8px rgba(105, 108, 255, 0);
+            border-color: #28a745;
+        }
+        100% {
+            box-shadow: 0 0 0 0 rgba(105, 108, 255, 0);
+            border-color: #696cff;
+        }
+    }
+
+    /* Signature Canvas Pad in Modal */
     .signature-canvas-container {
         border: 2px dashed #b4b7c5;
         border-radius: 8px;
-        background: #fbfbfd;
+        background: #ffffff;
         position: relative;
         touch-action: none;
     }
@@ -53,38 +152,86 @@
                         <i class="ri-close-circle-line"></i>
                         <span>Tolak Dokumen (Reject)</span>
                     </button>
-                    <button type="button" class="btn btn-success btn-lg d-flex align-items-center gap-2 shadow" data-bs-toggle="modal" data-bs-target="#modal-sign">
-                        <i class="ri-check-double-line fs-5"></i>
-                        <span>Tanda Tangani &amp; Setujui (Sign &amp; Approve)</span>
-                    </button>
                 </div>
             </div>
         </div>
 
         <div class="row g-3">
-            <!-- Left: Document Viewer -->
+            <!-- Left: Interactive PDF.js Document Viewer (col-lg-9) -->
             <div class="col-lg-9 col-md-8">
                 <div class="card shadow-sm">
-                    <div class="card-body p-0">
-                        <iframe src="{{ route('adhoc-document.view-pdf', ['uuid' => $document->uuid]) }}#toolbar=0" width="100%" height="750px" style="border: none;"></iframe>
+                    <div class="card-header border-bottom py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <h6 class="card-title mb-0 fw-bold"><i class="ri-file-pdf-line me-1 text-danger"></i> Pratinjau Dokumen</h6>
+                            <span class="badge bg-label-info" id="badge-page-info">Halaman <span id="page-num">1</span> / <span id="page-count">{{ $document->page_count }}</span></span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <!-- Page Controls -->
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-outline-secondary" onclick="prevPdfPage()" id="btn-prev" title="Halaman Sebelumnya">
+                                    <i class="ri-arrow-left-s-line"></i> Prev
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="nextPdfPage()" id="btn-next" title="Halaman Selanjutnya">
+                                    Next <i class="ri-arrow-right-s-line"></i>
+                                </button>
+                            </div>
+                            <!-- Zoom Controls -->
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-outline-secondary" onclick="zoomPdfOut()" title="Perkecil"><i class="ri-zoom-out-line"></i></button>
+                                <span class="btn btn-outline-secondary disabled fw-bold" id="zoom-label" style="min-width: 55px;">100%</span>
+                                <button type="button" class="btn btn-outline-secondary" onclick="zoomPdfIn()" title="Perbesar"><i class="ri-zoom-in-line"></i></button>
+                            </div>
+                            <!-- Open Original in new window -->
+                            <a href="{{ route('adhoc-document.view-pdf', ['uuid' => $document->uuid]) }}" target="_blank" class="btn btn-sm btn-outline-secondary" title="Buka PDF di Tab Baru">
+                                <i class="ri-external-link-line"></i>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Instructions banner -->
+                    <div class="alert alert-primary d-flex align-items-center justify-content-between m-3 mb-0 p-3 rounded-3 shadow-sm border-start border-primary border-4 flex-wrap gap-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="ri-quill-pen-line fs-3 text-primary"></i>
+                            <div>
+                                <strong class="d-block text-dark">Klik Kotak Tanda Tangan Anda Pada Dokumen!</strong>
+                                <span class="text-secondary small">Kotak tanda tangan Anda ditandai dengan garis biru berkedip di bawah. <strong>Klik langsung pada kotak</strong> untuk membubuhkan tanda tangan Anda.</span>
+                            </div>
+                        </div>
+                        @php
+                            $myFirstField = $myFields->first();
+                            $myTargetPage = $myFirstField ? $myFirstField->page_number : 1;
+                        @endphp
+                        @if($myFirstField)
+                        <button type="button" class="btn btn-sm btn-primary text-nowrap d-flex align-items-center gap-1 shadow-sm" onclick="goToPdfPage({{ $myTargetPage }})">
+                            <i class="ri-focus-3-line"></i> Lompat ke Posisi (Hal. {{ $myTargetPage }})
+                        </button>
+                        @endif
+                    </div>
+
+                    <!-- Canvas Viewer Wrapper -->
+                    <div class="card-body p-3 bg-secondary bg-opacity-10 d-flex justify-content-center overflow-auto position-relative" style="min-height: 700px;" id="pdf-container-scroll">
+                        <div id="pdf-wrapper" class="pdf-canvas-wrapper">
+                            <canvas id="pdf-canvas"></canvas>
+                            <div id="tags-overlay-layer" class="tags-overlay-layer"></div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Right: Instructions & Tag Summary -->
+            <!-- Right: Instructions & Tag Summary (col-lg-3) -->
             <div class="col-lg-3 col-md-4">
                 <div class="card mb-3 shadow-sm">
                     <div class="card-header border-bottom py-3 bg-light">
                         <h6 class="card-title mb-0 fw-bold"><i class="ri-map-pin-line text-primary me-1"></i> Titik Tanda Tangan Anda</h6>
                     </div>
                     <div class="card-body pt-3">
-                        <p class="text-muted small mb-2">Tanda tangan Anda akan otomatis ditempatkan pada posisi berikut:</p>
+                        <p class="text-muted small mb-2">Klik tombol halaman di bawah untuk menuju posisi kotak tanda tangan:</p>
                         <ul class="list-group list-group-flush small">
                             @forelse($myFields as $f)
                             <li class="list-group-item px-0 py-2 d-flex justify-content-between align-items-center">
                                 <div>
                                     @if($f->field_type === 'SIGNATURE')
-                                        <i class="ri-quill-pen-line text-primary me-1"></i> Tanda Tangan Utama
+                                        <i class="ri-quill-pen-line text-primary me-1"></i> Tanda Tangan
                                     @elseif($f->field_type === 'INITIAL_PARAF')
                                         <i class="ri-edit-line text-info me-1"></i> Initial / Paraf
                                     @elseif($f->field_type === 'SIGN_DATE')
@@ -93,10 +240,12 @@
                                         <i class="ri-user-star-line text-secondary me-1"></i> Nama &amp; Jabatan
                                     @endif
                                 </div>
-                                <span class="badge bg-label-secondary">Hal. {{ $f->page_number }}</span>
+                                <button type="button" class="btn btn-xs btn-outline-primary" onclick="goToPdfPage({{ $f->page_number }})">
+                                    Hal. {{ $f->page_number }} &rarr;
+                                </button>
                             </li>
                             @empty
-                            <li class="list-group-item px-0 text-muted">Belum ada titik khusus. Tanda tangan akan divalidasi pada dokumen.</li>
+                            <li class="list-group-item px-0 text-muted">Belum ada titik khusus.</li>
                             @endforelse
                         </ul>
                     </div>
@@ -106,7 +255,7 @@
                     <div class="card-body py-3">
                         <h6 class="fw-bold text-info mb-1"><i class="ri-shield-check-line me-1"></i> Keamanan &amp; Integritas</h6>
                         <p class="text-muted small mb-0">
-                            Aksi persetujuan Anda dicatat secara permanen dengan hash SHA-256, IP address, dan timestamp presisi pada Certificate of Completion resmi.
+                            Aksi persetujuan Anda dicatat secara permanen dengan hash SHA-256, IP address, dan timestamp presisi pada sistem audit log.
                         </p>
                     </div>
                 </div>
@@ -115,13 +264,13 @@
     </div>
 </div>
 
-<!-- Modal 1: Sign & Approve Modal -->
+<!-- Modal: Signature Pad & Konfirmasi Tanda Tangan (Muncul Saat Tagging Diklik) -->
 <div class="modal fade" id="modal-sign" tabindex="-1" aria-labelledby="modalSignLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header border-bottom">
-                <h5 class="modal-title fw-bold" id="modalSignLabel"><i class="ri-quill-pen-line text-primary me-1"></i> Konfirmasi Tanda Tangan</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        <div class="modal-content shadow-lg border-primary">
+            <div class="modal-header border-bottom bg-primary text-white">
+                <h5 class="modal-title fw-bold text-white" id="modalSignLabel"><i class="ri-quill-pen-line me-1"></i> Bubuhkan Tanda Tangan</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             
             <form action="{{ route('adhoc-document.sign', ['uuid' => $document->uuid]) }}" method="POST" id="form-sign-confirm">
@@ -129,7 +278,7 @@
                 <input type="hidden" name="signature_data" id="input-signature-data">
 
                 <div class="modal-body">
-                    <!-- Nav Tabs: Database vs Pad -->
+                    <!-- Nav Tabs: Tanda Tangan Profil vs Pad Gambar -->
                     <ul class="nav nav-tabs nav-fill mb-3" role="tablist">
                         <li class="nav-item">
                             <a class="nav-link {{ $existingSignatureUrl ? 'active' : '' }}" id="tab-db" data-bs-toggle="tab" href="#content-db" role="tab">
@@ -144,14 +293,14 @@
                     </ul>
 
                     <div class="tab-content p-0">
-                        <!-- Tab Content 1: Existing Database Signature -->
+                        <!-- Tab Content 1: Tanda Tangan dari Profil -->
                         <div class="tab-pane fade {{ $existingSignatureUrl ? 'show active' : '' }}" id="content-db" role="tabpanel">
                             @if($existingSignatureUrl)
                             <div class="sig-preview-box mb-3">
                                 <img src="{{ $existingSignatureUrl }}" alt="Signature Profil" class="sig-preview-img mb-2">
                                 <div class="text-success small fw-semibold"><i class="ri-checkbox-circle-fill me-1"></i> Tanda tangan terdaftar di profil Anda</div>
                             </div>
-                            <p class="text-muted small mb-0">Tanda tangan di atas akan otomatis digunakan dan ditempelkan pada dokumen ini.</p>
+                            <p class="text-muted small mb-0">Tanda tangan di atas akan otomatis digunakan dan ditempelkan pada posisi tagging dokumen ini.</p>
                             @else
                             <div class="alert alert-warning py-3 text-center mb-0">
                                 <i class="ri-alert-line fs-3 d-block mb-1"></i>
@@ -162,7 +311,7 @@
 
                         <!-- Tab Content 2: Signature Pad Canvas -->
                         <div class="tab-pane fade {{ !$existingSignatureUrl ? 'show active' : '' }}" id="content-draw" role="tabpanel">
-                            <p class="text-muted small mb-2">Tanda tangani langsung di dalam kotak berikut menggunakan mouse atau jari Anda:</p>
+                            <p class="text-muted small mb-2">Gambarkan tanda tangan Anda di dalam kotak berikut:</p>
                             
                             <div class="signature-canvas-container mb-2" style="background: #ffffff; border: 2px dashed #b4b7c5; border-radius: 8px; position: relative; overflow: hidden;">
                                 <canvas id="signature-pad-canvas" width="460" height="200" style="display: block; width: 100%; height: 200px; touch-action: none; cursor: crosshair; background: #ffffff;"></canvas>
@@ -175,7 +324,7 @@
                                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearSignaturePad()">
                                     <i class="ri-eraser-line me-1"></i> Hapus / Gambar Ulang
                                 </button>
-                                <small class="text-muted" style="font-size: 11px;">Otomatis disimpan ke profil Anda</small>
+                                <small class="text-muted" style="font-size: 11px;">Otomatis tersimpan &amp; sah secara hukum</small>
                             </div>
                         </div>
                     </div>
@@ -190,7 +339,7 @@
 
                 <div class="modal-footer border-top">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
-                    <button type="button" class="btn btn-success d-flex align-items-center gap-1" onclick="handleSignSubmit()">
+                    <button type="button" class="btn btn-success d-flex align-items-center gap-1 shadow" onclick="handleSignSubmit()">
                         <i class="ri-check-line"></i>
                         <span>Setujui &amp; Tanda Tangani</span>
                     </button>
@@ -200,10 +349,10 @@
     </div>
 </div>
 
-<!-- Modal 2: Reject Modal -->
+<!-- Modal: Tolak Dokumen (Reject) -->
 <div class="modal fade" id="modal-reject" tabindex="-1" aria-labelledby="modalRejectLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
+        <div class="modal-content shadow">
             <div class="modal-header border-bottom bg-danger text-white">
                 <h5 class="modal-title text-white fw-bold" id="modalRejectLabel"><i class="ri-close-circle-line me-1"></i> Tolak Dokumen</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -235,8 +384,178 @@
 @endsection
 
 @section('page-script')
+<!-- PDF.js CDN for Canvas Rendering -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>
-    // Bulletproof Responsive Signature Pad Canvas Engine
+    // Initialize PDF.js worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    const pdfUrl = "{{ route('adhoc-document.view-pdf', ['uuid' => $document->uuid]) }}";
+    const allFieldsData = @json($fieldsData);
+    const hasExistingProfileSig = {{ $existingSignatureUrl ? 'true' : 'false' }};
+
+    let pdfDoc = null;
+    let pageNum = 1;
+    let totalPages = {{ $document->page_count ?? 1 }};
+    let scale = 1.25;
+    let isRendering = false;
+    let pageNumPending = null;
+
+    const canvas = document.getElementById('pdf-canvas');
+    const ctx = canvas.getContext('2d');
+    const wrapper = document.getElementById('pdf-wrapper');
+    const tagsOverlayLayer = document.getElementById('tags-overlay-layer');
+
+    // Load PDF
+    pdfjsLib.getDocument({ url: pdfUrl, withCredentials: true }).promise.then(function(pdf) {
+        pdfDoc = pdf;
+        totalPages = pdf.numPages;
+        document.getElementById('page-count').textContent = totalPages;
+        renderPdfPage(pageNum);
+    }).catch(function(err) {
+        console.error('Error loading PDF:', err);
+    });
+
+    function renderPdfPage(num) {
+        if (isRendering) {
+            pageNumPending = num;
+            return;
+        }
+        isRendering = true;
+
+        pdfDoc.getPage(num).then(function(page) {
+            const viewport = page.getViewport({ scale: scale });
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            wrapper.style.width = viewport.width + 'px';
+            wrapper.style.height = viewport.height + 'px';
+
+            const renderContext = {
+                canvasContext: ctx,
+                viewport: viewport
+            };
+
+            page.render(renderContext).promise.then(function() {
+                isRendering = false;
+                document.getElementById('page-num').textContent = num;
+                document.getElementById('zoom-label').textContent = Math.round(scale * 80) + '%';
+                
+                // Render the tagging overlay for this page
+                renderTagsForPage(num);
+
+                if (pageNumPending !== null) {
+                    const nextNum = pageNumPending;
+                    pageNumPending = null;
+                    renderPdfPage(nextNum);
+                }
+            });
+        });
+
+        // Update Prev/Next buttons
+        document.getElementById('btn-prev').disabled = (num <= 1);
+        document.getElementById('btn-next').disabled = (num >= totalPages);
+    }
+
+    function prevPdfPage() {
+        if (pageNum <= 1) return;
+        pageNum--;
+        renderPdfPage(pageNum);
+    }
+
+    function nextPdfPage() {
+        if (pageNum >= totalPages) return;
+        pageNum++;
+        renderPdfPage(pageNum);
+    }
+
+    function goToPdfPage(num) {
+        if (num < 1 || num > totalPages) return;
+        pageNum = num;
+        renderPdfPage(pageNum);
+    }
+
+    function zoomPdfIn() {
+        if (scale >= 2.5) return;
+        scale += 0.25;
+        renderPdfPage(pageNum);
+    }
+
+    function zoomPdfOut() {
+        if (scale <= 0.75) return;
+        scale -= 0.25;
+        renderPdfPage(pageNum);
+    }
+
+    // Render Overlay Tags on Canvas
+    function renderTagsForPage(currentPage) {
+        tagsOverlayLayer.innerHTML = '';
+        const wrapperWidth = wrapper.clientWidth;
+        const wrapperHeight = wrapper.clientHeight;
+
+        const pageFields = allFieldsData.filter(f => f.page_number === currentPage);
+
+        pageFields.forEach(f => {
+            const box = document.createElement('div');
+            box.className = 'preview-tag-box';
+            
+            // Calculate absolute pixel coordinates from percentages
+            const left = (f.x_percent / 100 * wrapperWidth);
+            const top = (f.y_percent / 100 * wrapperHeight);
+            const width = (f.width_percent / 100 * wrapperWidth);
+            const height = (f.height_percent / 100 * wrapperHeight);
+
+            box.style.left = left + 'px';
+            box.style.top = top + 'px';
+            box.style.width = width + 'px';
+            box.style.height = height + 'px';
+
+            let typeLabel = 'Tanda Tangan';
+            if (f.field_type === 'INITIAL_PARAF') typeLabel = 'Paraf';
+            if (f.field_type === 'SIGN_DATE') typeLabel = 'Tanggal Sign';
+            if (f.field_type === 'NAME_TITLE') typeLabel = 'Nama & Jabatan';
+
+            if (f.is_my_turn) {
+                // ACTIVE: Current user's turn to sign -> Clickable & pulsating
+                box.classList.add('my-active-sign');
+                box.title = 'Klik di sini untuk menandatangani dokumen!';
+                box.innerHTML = `
+                    <div class="d-flex flex-column align-items-center justify-content-center h-100 p-1">
+                        <i class="ri-quill-pen-fill fs-5 text-primary mb-1"></i>
+                        <span class="fw-bold" style="font-size: 11px; line-height: 1.1;">👆 Klik untuk Tanda Tangan</span>
+                        <small class="text-muted" style="font-size: 9px;">${f.signer_name}</small>
+                    </div>
+                `;
+                box.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    openSignModal();
+                });
+            } else if (f.signer_status === 'SIGNED') {
+                // Completed sign
+                box.classList.add('signed');
+                box.innerHTML = `
+                    <div class="d-flex flex-column align-items-center justify-content-center h-100 p-1">
+                        <i class="ri-checkbox-circle-fill fs-6 text-success mb-1"></i>
+                        <span class="fw-bold" style="font-size: 10px; line-height: 1.1;">✓ Selesai</span>
+                        <small style="font-size: 9px;">${f.signer_name}</small>
+                    </div>
+                `;
+            } else {
+                // Waiting / Other signer
+                box.classList.add('waiting');
+                box.innerHTML = `
+                    <div class="d-flex flex-column align-items-center justify-content-center h-100 p-1">
+                        <i class="ri-user-line fs-6 mb-1"></i>
+                        <span style="font-size: 10px; line-height: 1.1;">${typeLabel}</span>
+                        <small class="text-muted" style="font-size: 9px;">${f.signer_name}</small>
+                    </div>
+                `;
+            }
+
+            tagsOverlayLayer.appendChild(box);
+        });
+    }
+
+    // Modal & Signature Pad Canvas Management
     const sigCanvas = document.getElementById('signature-pad-canvas');
     const sigCtx = sigCanvas ? sigCanvas.getContext('2d') : null;
     let isDrawing = false;
@@ -261,16 +580,13 @@
         const targetWidth = Math.round(rect.width || (container ? container.clientWidth : 0) || 460);
         const targetHeight = Math.round(rect.height || (container ? container.clientHeight : 0) || 200);
 
-        // Do not resize if hidden with 0 width
         if (targetWidth < 50 || targetHeight < 50) return;
 
-        // If dimensions already match, just ensure stroke styles are set
         if (sigCanvas.width === targetWidth && sigCanvas.height === targetHeight) {
             initCanvasContext();
             return;
         }
 
-        // Preserve current drawing if resizing
         let savedData = null;
         if (hasDrawnOnPad && sigCanvas.width > 0 && sigCanvas.height > 0) {
             try {
@@ -291,8 +607,13 @@
         }
     }
 
+    function clearSignaturePad() {
+        if (!sigCtx || !sigCanvas) return;
+        sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+        hasDrawnOnPad = false;
+    }
+
     function getCanvasCoordinates(e) {
-        if (!sigCanvas) return { x: 0, y: 0 };
         const rect = sigCanvas.getBoundingClientRect();
         let clientX = e.clientX;
         let clientY = e.clientY;
@@ -302,124 +623,104 @@
             clientY = e.touches[0].clientY;
         }
 
-        const scaleX = sigCanvas.width / (rect.width || 1);
-        const scaleY = sigCanvas.height / (rect.height || 1);
-
         return {
-            x: (clientX - rect.left) * scaleX,
-            y: (clientY - rect.top) * scaleY
+            x: (clientX - rect.left) * (sigCanvas.width / rect.width),
+            y: (clientY - rect.top) * (sigCanvas.height / rect.height)
         };
     }
 
-    if (sigCanvas && sigCtx) {
-        initCanvasContext();
+    function startDrawing(e) {
+        if (!sigCtx) return;
+        isDrawing = true;
+        const coords = getCanvasCoordinates(e);
+        lastX = coords.x;
+        lastY = coords.y;
 
-        // Listen for Modal Open
-        const modalSign = document.getElementById('modal-sign');
-        if (modalSign) {
-            modalSign.addEventListener('shown.bs.modal', function() {
-                setTimeout(resizeSignatureCanvas, 60);
-            });
-        }
+        sigCtx.beginPath();
+        sigCtx.arc(lastX, lastY, sigCtx.lineWidth / 2, 0, Math.PI * 2);
+        sigCtx.fill();
+        hasDrawnOnPad = true;
+    }
 
-        // Listen for Tab Switching
-        const tabDraw = document.getElementById('tab-draw');
-        if (tabDraw) {
-            tabDraw.addEventListener('shown.bs.tab', function() {
-                setTimeout(resizeSignatureCanvas, 60);
-            });
-            tabDraw.addEventListener('click', function() {
-                setTimeout(resizeSignatureCanvas, 80);
-            });
-        }
+    function draw(e) {
+        if (!isDrawing || !sigCtx) return;
+        e.preventDefault();
+        const coords = getCanvasCoordinates(e);
 
-        // Start Stroke (Mouse & Touch)
-        function startDrawing(e) {
-            if (e.type === 'touchstart') e.preventDefault();
-            // Failsafe resize if canvas was initialized with 0
-            if (sigCanvas.width < 50 || sigCanvas.height < 50) {
-                resizeSignatureCanvas();
-            }
-            initCanvasContext();
+        sigCtx.beginPath();
+        sigCtx.moveTo(lastX, lastY);
+        sigCtx.lineTo(coords.x, coords.y);
+        sigCtx.stroke();
 
-            isDrawing = true;
-            hasDrawnOnPad = true;
+        lastX = coords.x;
+        lastY = coords.y;
+        hasDrawnOnPad = true;
+    }
 
-            const pos = getCanvasCoordinates(e);
-            lastX = pos.x;
-            lastY = pos.y;
+    function stopDrawing() {
+        isDrawing = false;
+    }
 
-            // Draw initial dot on tap/click
-            sigCtx.beginPath();
-            sigCtx.arc(lastX, lastY, 1.25, 0, Math.PI * 2);
-            sigCtx.fill();
-        }
-
-        // Continue Stroke (Mouse & Touch)
-        function draw(e) {
-            if (!isDrawing) return;
-            if (e.type === 'touchmove') e.preventDefault();
-
-            const pos = getCanvasCoordinates(e);
-
-            sigCtx.beginPath();
-            sigCtx.moveTo(lastX, lastY);
-            sigCtx.lineTo(pos.x, pos.y);
-            sigCtx.stroke();
-
-            lastX = pos.x;
-            lastY = pos.y;
-        }
-
-        // End Stroke
-        function stopDrawing() {
-            isDrawing = false;
-        }
-
-        // Event Listeners
+    // Attach mouse & touch events
+    if (sigCanvas) {
         sigCanvas.addEventListener('mousedown', startDrawing);
         sigCanvas.addEventListener('mousemove', draw);
-        window.addEventListener('mouseup', stopDrawing);
+        sigCanvas.addEventListener('mouseup', stopDrawing);
+        sigCanvas.addEventListener('mouseleave', stopDrawing);
 
         sigCanvas.addEventListener('touchstart', startDrawing, { passive: false });
         sigCanvas.addEventListener('touchmove', draw, { passive: false });
-        window.addEventListener('touchend', stopDrawing);
+        sigCanvas.addEventListener('touchend', stopDrawing, { passive: false });
     }
 
-    function clearSignaturePad() {
-        if (!sigCanvas || !sigCtx) return;
-        sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
-        hasDrawnOnPad = false;
-        initCanvasContext();
+    function openSignModal() {
+        const modalEl = document.getElementById('modal-sign');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
     }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const modalEl = document.getElementById('modal-sign');
+        if (modalEl) {
+            modalEl.addEventListener('shown.bs.modal', function() {
+                resizeSignatureCanvas();
+            });
+        }
+
+        const tabDraw = document.getElementById('tab-draw');
+        if (tabDraw) {
+            tabDraw.addEventListener('shown.bs.tab', function() {
+                setTimeout(resizeSignatureCanvas, 100);
+            });
+        }
+    });
 
     function handleSignSubmit() {
-        const checkbox = document.getElementById('check-confirm-sign');
-        if (!checkbox || !checkbox.checked) {
-            alert('Harap centang konfirmasi persetujuan dokumen terlebih dahulu.');
+        const checkConfirm = document.getElementById('check-confirm-sign');
+        if (!checkConfirm.checked) {
+            alert('Mohon centang persetujuan dokumen sebelum melanjutkan.');
+            checkConfirm.focus();
             return;
         }
 
-        const activeTab = document.querySelector('#modal-sign .nav-link.active');
-        const isDrawTab = activeTab && activeTab.id === 'tab-draw';
-        const hasExisting = {{ $existingSignatureUrl ? 'true' : 'false' }};
+        const activeDrawTab = document.querySelector('#tab-draw.active');
+        const inputSigData = document.getElementById('input-signature-data');
 
-        if (isDrawTab) {
+        if (activeDrawTab) {
             if (!hasDrawnOnPad) {
-                alert('Silakan buat tanda tangan Anda terlebih dahulu pada kotak Signature Pad.');
+                alert('Silakan gambar tanda tangan Anda di canvas terlebih dahulu.');
                 return;
             }
-            // Export canvas to base64 DataURL (PNG)
-            const dataUrl = sigCanvas.toDataURL('image/png');
-            document.getElementById('input-signature-data').value = dataUrl;
+            inputSigData.value = sigCanvas.toDataURL('image/png');
         } else {
-            if (!hasExisting) {
-                alert('Anda belum memiliki tanda tangan di database. Silakan gunakan tab "Gambar di Layar (Pad)".');
+            if (!hasExistingProfileSig) {
+                alert('Tanda tangan profil belum tersedia. Silakan gunakan tab "Gambar di Layar (Pad)".');
                 return;
             }
-            document.getElementById('input-signature-data').value = '';
+            inputSigData.value = ''; // Use profile signature on backend
         }
 
+        // Submit form
         document.getElementById('form-sign-confirm').submit();
     }
 </script>

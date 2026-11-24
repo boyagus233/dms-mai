@@ -63,7 +63,11 @@ class KalibrasiController extends Controller
         }
 
         // Sort by next calibration date nearest (ASC)
-        $tools = $query->orderBy('next_calibration_date', 'asc')->paginate(25)->withQueryString();
+        $perPage = (int) $request->input('per_page', 25);
+        if (!in_array($perPage, [10, 25, 50, 100])) {
+            $perPage = 25;
+        }
+        $tools = $query->orderBy('next_calibration_date', 'asc')->paginate($perPage)->withQueryString();
 
         // Summary counters
         $counts = [
@@ -173,7 +177,11 @@ class KalibrasiController extends Controller
 
     public function pendingReturn(Request $request)
     {
-        $tools = AlatUkur::outOfPremise()->orderBy('updated_at', 'desc')->paginate(25);
+        $perPage = (int) $request->input('per_page', 25);
+        if (!in_array($perPage, [10, 25, 50, 100])) {
+            $perPage = 25;
+        }
+        $tools = AlatUkur::outOfPremise()->orderBy('updated_at', 'desc')->paginate($perPage)->withQueryString();
         $vendors = Vendor::active()->orderBy('name')->get(['id', 'code', 'name']);
 
         return view('content.kalibrasi.pending_return', compact('tools', 'vendors'));
@@ -266,7 +274,11 @@ class KalibrasiController extends Controller
             $query->where('approver_id', $user->id);
         }
 
-        $items = $query->orderBy('created_at', 'asc')->paginate(20);
+        $perPage = (int) $request->input('per_page', 20);
+        if (!in_array($perPage, [10, 20, 50, 100])) {
+            $perPage = 20;
+        }
+        $items = $query->orderBy('created_at', 'asc')->paginate($perPage)->withQueryString();
 
         return view('content.kalibrasi.approval_queue', compact('items'));
     }
@@ -377,7 +389,11 @@ class KalibrasiController extends Controller
             }
         }
 
-        $records = $query->orderBy('calibration_date', 'desc')->paginate(20)->withQueryString();
+        $perPage = (int) $request->input('per_page', 20);
+        if (!in_array($perPage, [10, 20, 50, 100])) {
+            $perPage = 20;
+        }
+        $records = $query->orderBy('calibration_date', 'desc')->paginate($perPage)->withQueryString();
 
         return view('content.kalibrasi.archive', compact('records'));
     }

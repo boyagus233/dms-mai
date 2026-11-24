@@ -86,11 +86,11 @@
               <input type="text" name="search" value="{{ request('search') }}" class="form-control" placeholder="Cari kode alat, nama, model, no seri..." />
             </div>
           </div>
-          <div class="col-6 col-md-3">
+          <div class="col-6 col-md-2">
             <select name="category" class="form-select" onchange="this.form.submit()">
               <option value="">Semua Tipe (KI & KE)</option>
-              <option value="KI" @selected(request('category') === 'KI')>KI — Kalibrasi Internal</option>
-              <option value="KE" @selected(request('category') === 'KE')>KE — Kalibrasi Eksternal</option>
+              <option value="KI" @selected(request('category') === 'KI')>KI — Internal</option>
+              <option value="KE" @selected(request('category') === 'KE')>KE — Eksternal</option>
             </select>
           </div>
           <div class="col-6 col-md-3">
@@ -101,9 +101,17 @@
               <option value="safe" @selected(request('due_filter') === 'safe')>Jadwal Aman</option>
             </select>
           </div>
-          <div class="col-12 col-md-2 d-flex gap-1">
+          <div class="col-6 col-md-1">
+            <select name="per_page" class="form-select" onchange="this.form.submit()" title="Jumlah per halaman">
+              <option value="10" @selected(request('per_page') == 10)>10</option>
+              <option value="25" @selected(request('per_page', 25) == 25)>25</option>
+              <option value="50" @selected(request('per_page') == 50)>50</option>
+              <option value="100" @selected(request('per_page') == 100)>100</option>
+            </select>
+          </div>
+          <div class="col-6 col-md-2 d-flex gap-1">
             <button type="submit" class="btn btn-primary w-100"><i class="ri-filter-3-line me-1"></i> Filter</button>
-            @if(request()->hasAny(['search', 'category', 'due_filter']))
+            @if(request()->hasAny(['search', 'category', 'due_filter', 'per_page']))
               <a href="{{ route('kalibrasi.index') }}" class="btn btn-outline-secondary" title="Reset Filter"><i class="ri-refresh-line"></i></a>
             @endif
           </div>
@@ -240,12 +248,13 @@
       </div>
 
       {{-- Pagination --}}
-      @if($tools->hasPages())
-        <div class="card-footer border-top d-flex justify-content-between align-items-center py-2">
-          <small class="text-muted">Menampilkan {{ $tools->firstItem() }} - {{ $tools->lastItem() }} dari {{ $tools->total() }} alat ukur</small>
+      <div class="card-footer border-top py-2">
+        @if($tools->hasPages())
           {{ $tools->links() }}
-        </div>
-      @endif
+        @else
+          <small class="text-muted">Menampilkan {{ $tools->total() }} dari {{ $tools->total() }} alat ukur</small>
+        @endif
+      </div>
 
     </div>
   </div>

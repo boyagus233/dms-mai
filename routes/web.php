@@ -18,6 +18,7 @@ use App\Http\Controllers\DepartementController;
 use App\Http\Controllers\PositionController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\VendorController;
+use App\Http\Controllers\KalibrasiController;
 use App\Http\Controllers\DocumentUploadController;
 use App\Http\Controllers\DocumentRequestController;
 use App\Http\Controllers\DocumentAcknowledgeController;
@@ -154,6 +155,22 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/master-vendor/export', [VendorController::class, 'export'])->name('vendor.export');
     Route::resource('master-vendor', VendorController::class)->names('vendor')->parameters(['master-vendor' => 'vendor']);
     Route::get('/vendors', [VendorController::class, 'index'])->name('vendor.alias');
+});
+
+Route::middleware(['auth'])->prefix('kalibrasi')->name('kalibrasi.')->group(function () {
+    Route::get('/', [KalibrasiController::class, 'index'])->name('index');
+    Route::get('/internal/{alatUkur}', [KalibrasiController::class, 'createInternal'])->name('create-internal');
+    Route::post('/internal/{alatUkur}', [KalibrasiController::class, 'storeInternal'])->name('store-internal');
+    Route::post('/eksternal/{alatUkur}/mark', [KalibrasiController::class, 'markEksternal'])->name('mark-eksternal');
+    Route::get('/pending-return', [KalibrasiController::class, 'pendingReturn'])->name('pending-return');
+    Route::get('/return/{alatUkur}', [KalibrasiController::class, 'returnForm'])->name('return-form');
+    Route::post('/return/{alatUkur}', [KalibrasiController::class, 'storeReturn'])->name('store-return');
+    Route::get('/approval-queue', [KalibrasiController::class, 'approvalQueue'])->name('approval-queue');
+    Route::get('/{kalibrasi}/preview', [KalibrasiController::class, 'preview'])->name('preview');
+    Route::post('/{kalibrasi}/approve', [KalibrasiController::class, 'approve'])->name('approve');
+    Route::post('/{kalibrasi}/reject', [KalibrasiController::class, 'reject'])->name('reject');
+    Route::get('/archive', [KalibrasiController::class, 'archive'])->name('archive');
+    Route::get('/{kalibrasi}/pdf', [KalibrasiController::class, 'downloadPdf'])->name('download-pdf');
 });
 
 Route::middleware(['auth'])->group(function () {

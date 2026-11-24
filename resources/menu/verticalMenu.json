@@ -138,6 +138,35 @@
       ]
     },
     {
+      "name": "Kalibrasi Alat Ukur",
+      "icon": "menu-icon tf-icons ri-compass-3-line",
+      "slug": "kalibrasi",
+      "group": "kalibrasi.index,kalibrasi.create-internal,kalibrasi.pending-return,kalibrasi.return-form,kalibrasi.approval-queue,kalibrasi.preview,kalibrasi.archive",
+      "role": "EMP",
+      "submenu": [
+        {
+          "url": "kalibrasi",
+          "name": "Perlu Kalibrasi",
+          "slug": "kalibrasi.index"
+        },
+        {
+          "url": "kalibrasi/pending-return",
+          "name": "Pending Return (Vendor)",
+          "slug": "kalibrasi.pending-return"
+        },
+        {
+          "url": "kalibrasi/approval-queue",
+          "name": "Antrean Approval",
+          "slug": "kalibrasi.approval-queue"
+        },
+        {
+          "url": "kalibrasi/archive",
+          "name": "Arsip Sah & Riwayat",
+          "slug": "kalibrasi.archive"
+        }
+      ]
+    },
+    {
       "menuHeader": "Doc Control",
       "group": "",
       "role": "EMP"

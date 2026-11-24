@@ -237,7 +237,13 @@ class AdhocDocumentController extends Controller
         $user = Auth::user();
         $mySignerRecord = $document->signers->firstWhere('user_id', $user->id);
         $myFields = $mySignerRecord ? $document->fields->where('document_signer_id', $mySignerRecord->id)->values() : collect();
-        $existingSignatureUrl = $this->signerService->getUserSignatureImageUrl($user->id);
+
+        $existingSignatureUrl = null;
+        if ($user->employee && !empty($user->employee->signature) && Storage::disk('public')->exists('signature/' . $user->employee->signature)) {
+            $existingSignatureUrl = asset('storage/signature/' . $user->employee->signature);
+        } elseif (!empty($user->signature) && Storage::disk('public')->exists('signature/' . $user->signature)) {
+            $existingSignatureUrl = asset('storage/signature/' . $user->signature);
+        }
 
         $fieldsData = $document->fields->map(function ($f) use ($user, $mySignerRecord, $document) {
             $signer = $f->signer;

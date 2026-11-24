@@ -2,7 +2,7 @@
 Halo {{ $recipientName }},
 
 @if ($type === \App\Mail\SuratJalanNotification::TYPE_SIGN_REQUEST)
-Anda diminta untuk melakukan **Approve / Sign** sebagai **{{ $slotLabel }}** pada Surat Jalan berikut:
+Anda diminta untuk **menandatangani** kotak **{{ $slotLabel }}** pada Surat Jalan berikut. Klik tombol di bawah, periksa dokumen, lalu tanda tangani langsung di pop-up yang muncul:
 @elseif ($type === \App\Mail\SuratJalanNotification::TYPE_COMPLETED)
 Seluruh proses tanda tangan Surat Jalan berikut telah **selesai (COMPLETED)**. Dokumen PDF resmi sudah dapat diunduh.
 @elseif ($type === \App\Mail\SuratJalanNotification::TYPE_REJECTED)
@@ -24,7 +24,7 @@ Surat Jalan berikut **DITOLAK** oleh {{ $actorName }}.
 @endif
 
 @component('mail::button', ['url' => $documentLink])
-{{ $type === \App\Mail\SuratJalanNotification::TYPE_SIGN_REQUEST ? 'Review & Approve' : 'Lihat Dokumen' }}
+{{ $type === \App\Mail\SuratJalanNotification::TYPE_SIGN_REQUEST ? 'Buka & Tanda Tangan' : 'Lihat Dokumen' }}
 @endcomponent
 
 Tautan di atas akan meminta Anda login ke aplikasi terlebih dahulu bila sesi belum aktif.

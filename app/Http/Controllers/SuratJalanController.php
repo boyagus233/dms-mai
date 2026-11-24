@@ -116,13 +116,21 @@ class SuratJalanController extends Controller
         $data = $this->validated($request);
         $sj = $this->service->create($data, $user);
 
+        return $this->afterSave($request, $sj, 'Draft Surat Jalan berhasil disimpan.');
+    }
+
+    /**
+     * Setelah simpan draft: bila user menekan "Submit & Tanda Tangan", arahkan ke halaman detail
+     * dengan pop-up tanda tangan kotak Diserahkan langsung terbuka (submit terjadi saat ia tanda tangan).
+     */
+    private function afterSave(Request $request, SuratJalan $sj, string $draftMessage)
+    {
         if ($request->input('action') === 'submit') {
-            $sj = $this->service->submit($sj, $user);
-            Alert::success('Berhasil', "Surat Jalan {$sj->sj_no} berhasil di-submit & dikirim ke Dept. Head.");
-        } else {
-            Alert::success('Tersimpan', 'Draft Surat Jalan berhasil disimpan.');
+            Alert::info('Tanda Tangan Diserahkan', 'Draft tersimpan. Tanda tangani kotak "Diserahkan" untuk submit Surat Jalan.');
+            return redirect()->route('surat-jalan.show', ['suratJalan' => $sj->uuid, 'sign' => 1]);
         }
 
+        Alert::success('Tersimpan', $draftMessage);
         return redirect()->route('surat-jalan.show', $sj->uuid);
     }
 
@@ -140,14 +148,7 @@ class SuratJalanController extends Controller
         $data = $this->validated($request);
         $sj = $this->service->update($suratJalan, $data, $user);
 
-        if ($request->input('action') === 'submit') {
-            $sj = $this->service->submit($sj, $user);
-            Alert::success('Berhasil', "Surat Jalan {$sj->sj_no} berhasil di-submit & dikirim ke Dept. Head.");
-        } else {
-            Alert::success('Tersimpan', 'Draft Surat Jalan berhasil diperbarui.');
-        }
-
-        return redirect()->route('surat-jalan.show', $sj->uuid);
+        return $this->afterSave($request, $sj, 'Draft Surat Jalan berhasil diperbarui.');
     }
 
     public function destroy(SuratJalan $suratJalan)
@@ -158,10 +159,12 @@ class SuratJalanController extends Controller
         return redirect()->route('surat-jalan.index');
     }
 
-    public function submit(SuratJalan $suratJalan)
+    /** Pop-up tanda tangan kotak Diserahkan (pemohon) → submit dokumen. */
+    public function submit(Request $request, SuratJalan $suratJalan)
     {
-        $sj = $this->service->submit($suratJalan->load('signers'), Auth::user());
-        Alert::success('Berhasil', "Surat Jalan {$sj->sj_no} berhasil di-submit & dikirim ke Dept. Head.");
+        [$pad, $saveToProfile] = $this->signatureInput($request);
+        $sj = $this->service->submit($suratJalan->load('signers'), Auth::user(), $pad, $saveToProfile);
+        Alert::success('Berhasil', "Surat Jalan {$sj->sj_no} berhasil ditandatangani & dikirim ke Dept. Head.");
 
         return redirect()->route('surat-jalan.show', $sj->uuid);
     }
@@ -170,7 +173,7 @@ class SuratJalanController extends Controller
     /*  Detail, approve, reject                                            */
     /* ------------------------------------------------------------------ */
 
-    public function show(SuratJalan $suratJalan)
+    public function show(Request $request, SuratJalan $suratJalan)
     {
         $user = Auth::user();
         $suratJalan->load(['items', 'signers.user', 'departement', 'creator', 'rejecter']);
@@ -183,12 +186,19 @@ class SuratJalanController extends Controller
         $this->service->recordView($suratJalan, $user);
 
         $canSign = $this->service->canSign($suratJalan, $user);
+        $canEdit = $this->service->canEdit($suratJalan, $user);
         $currentSigner = $suratJalan->currentSigner();
+
+        // Kotak yang boleh ditandatangani user ini sekarang (tombol + pop-up muncul di kotak tsb):
+        // draft milik pemohon → kotak 1 (Diserahkan = submit); giliran approval → kotak signer aktif.
+        $signableStep = $canEdit ? 1 : ($canSign ? $currentSigner?->step : null);
 
         return view('content.surat-jalan.show', [
             'sj'            => $suratJalan,
             'canSign'       => $canSign,
-            'canEdit'       => $this->service->canEdit($suratJalan, $user),
+            'canEdit'       => $canEdit,
+            'signableStep'  => $signableStep,
+            'autoOpenSign'  => $signableStep && $request->boolean('sign'),
             'currentSigner' => $currentSigner,
             'myStampUrl'    => $this->service->hasStampImage($user)
                 ? asset('storage/signature/' . rawurlencode($this->service->profile($user)['signature']))
@@ -199,13 +209,11 @@ class SuratJalanController extends Controller
         ]);
     }
 
+    /** Pop-up tanda tangan kotak Mengetahui / Pemeriksa / Diterima → approve & sign. */
     public function approve(Request $request, SuratJalan $suratJalan)
     {
-        $request->validate([
-            'signature_pad' => ['nullable', 'string', 'max:1400000'],
-        ]);
-
-        $sj = $this->service->approve($suratJalan->load('signers'), Auth::user(), $request->input('signature_pad') ?: null);
+        [$pad, $saveToProfile] = $this->signatureInput($request);
+        $sj = $this->service->approve($suratJalan->load('signers'), Auth::user(), $pad, $saveToProfile);
 
         $msg = $sj->status === SuratJalan::STATUS_COMPLETED
             ? 'Seluruh tanda tangan lengkap. Surat Jalan berstatus COMPLETED.'
@@ -286,6 +294,29 @@ class SuratJalanController extends Controller
     /* ------------------------------------------------------------------ */
     /*  Helpers                                                            */
     /* ------------------------------------------------------------------ */
+
+    /**
+     * Input dari pop-up tanda tangan.
+     * sign_mode=pad → wajib ada gambar signature pad; sign_mode=profile → stamp profil (QR bila tidak ada).
+     *
+     * @return array{0:?string,1:bool} [padDataUrl, saveToProfile]
+     */
+    private function signatureInput(Request $request): array
+    {
+        $data = $request->validate([
+            'sign_mode'       => ['required', Rule::in(['pad', 'profile'])],
+            'signature_pad'   => ['nullable', 'required_if:sign_mode,pad', 'string', 'max:1400000'],
+            'save_to_profile' => ['nullable', 'boolean'],
+            'confirm'         => ['accepted'],
+        ], [
+            'signature_pad.required_if' => 'Silakan gambar tanda tangan Anda terlebih dahulu.',
+            'confirm.accepted'          => 'Centang konfirmasi bahwa Anda telah memeriksa isi Surat Jalan.',
+        ]);
+
+        $isPad = $data['sign_mode'] === 'pad';
+
+        return [$isPad ? $data['signature_pad'] : null, $isPad && $request->boolean('save_to_profile')];
+    }
 
     private function validated(Request $request): array
     {

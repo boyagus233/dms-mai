@@ -124,7 +124,7 @@ class SuratJalanService
             'location'       => $data['location'] ?? config('surat_jalan.default_location'),
             'kepada_tipe'    => $data['kepada_tipe'] ?? null,
             'kepada'         => $data['kepada'],
-            'no_kendaraan'   => $data['no_kendaraan'] ? strtoupper($data['no_kendaraan']) : null,
+            'no_kendaraan'   => !empty($data['no_kendaraan']) ? strtoupper($data['no_kendaraan']) : null,
             'kategori'       => $kategori,
             'kategori_lain'  => in_array('LAIN_LAIN', $kategori, true) ? ($data['kategori_lain'] ?? null) : null,
         ];
@@ -183,11 +183,17 @@ class SuratJalanService
      |  Submit (slot 1 Diserahkan otomatis ter-sign)
      * ------------------------------------------------------------------- */
 
-    public function submit(SuratJalan $sj, User $user): SuratJalan
+    /**
+     * Submit = pemohon menandatangani kotak "Diserahkan" lewat pop-up tanda tangan.
+     *
+     * @param string|null $padDataUrl  PNG data URL hasil signature pad; null = pakai stamp profil (atau QR bila tidak ada)
+     * @param bool        $saveToProfile simpan gambar pad sebagai tanda tangan profil user
+     */
+    public function submit(SuratJalan $sj, User $user, ?string $padDataUrl = null, bool $saveToProfile = false): SuratJalan
     {
         $this->ensure($this->canEdit($sj, $user), 'Dokumen ini tidak dapat di-submit.');
 
-        DB::transaction(function () use ($sj, $user) {
+        DB::transaction(function () use ($sj, $user, $padDataUrl, $saveToProfile) {
             /** @var SuratJalan $locked */
             $locked = SuratJalan::whereKey($sj->id)->lockForUpdate()->first();
             $this->ensure($locked->isDraft(), 'Dokumen sudah pernah di-submit.');
@@ -201,7 +207,7 @@ class SuratJalanService
             $sj->save();
 
             $first = $sj->signers()->where('step', 1)->lockForUpdate()->firstOrFail();
-            $this->sign($sj, $first, $user);
+            $this->sign($sj, $first, $user, $padDataUrl, $saveToProfile);
 
             $sj->signers()->where('step', 2)->update(['status' => SuratJalanSigner::STATUS_PENDING]);
 
@@ -220,24 +226,20 @@ class SuratJalanService
      |  Approve / Sign & Reject
      * ------------------------------------------------------------------- */
 
-    public function approve(SuratJalan $sj, User $user, ?string $padDataUrl = null): SuratJalan
+    public function approve(SuratJalan $sj, User $user, ?string $padDataUrl = null, bool $saveToProfile = false): SuratJalan
     {
         $completed = false;
         $nextStep = null;
 
-        DB::transaction(function () use ($sj, $user, $padDataUrl, &$completed, &$nextStep) {
+        DB::transaction(function () use ($sj, $user, $padDataUrl, $saveToProfile, &$completed, &$nextStep) {
             $locked = SuratJalan::whereKey($sj->id)->lockForUpdate()->first();
             $this->ensure($locked->status === SuratJalan::STATUS_IN_PROGRESS, 'Dokumen tidak dalam proses approval.');
 
             $signer = $sj->signers()->where('status', SuratJalanSigner::STATUS_PENDING)->lockForUpdate()->first();
             $this->ensure($signer && $signer->user_id === $user->id, 'Saat ini bukan giliran Anda untuk menandatangani dokumen ini.');
 
-            // Signature pad hanya untuk slot Diterima (serah terima di gate).
-            if ($padDataUrl && $signer->step !== 4) {
-                $padDataUrl = null;
-            }
-
-            $this->sign($sj, $signer, $user, $padDataUrl);
+            // Semua kotak boleh ditandatangani lewat signature pad (pop-up tanda tangan).
+            $this->sign($sj, $signer, $user, $padDataUrl, $saveToProfile);
 
             $this->audit->log(SuratJalan::DOCUMENT_TYPE, $sj->id, DocumentAuditLogger::APPROVED_SIGNED,
                 $signer->slotLabel() . ' di-approve & ditandatangani oleh ' . $signer->signer_name,
@@ -322,11 +324,15 @@ class SuratJalanService
      * Tandai signer sebagai SIGNED + simpan snapshot stamp (agar perubahan
      * tanda tangan di profil di kemudian hari tidak mengubah dokumen yang sudah ditandatangani).
      */
-    private function sign(SuratJalan $sj, SuratJalanSigner $signer, User $user, ?string $padDataUrl = null): void
+    private function sign(SuratJalan $sj, SuratJalanSigner $signer, User $user, ?string $padDataUrl = null, bool $saveToProfile = false): void
     {
         $request = request();
         $profile = $this->profile($user);
         [$type, $path] = $this->snapshotStamp($sj, $signer, $profile, $padDataUrl);
+
+        if ($saveToProfile && $type === SuratJalanSigner::STAMP_PAD) {
+            $this->saveSignatureToProfile($user, Storage::disk('local')->get($path));
+        }
 
         $signer->update([
             'status'             => SuratJalanSigner::STATUS_SIGNED,
@@ -365,6 +371,25 @@ class SuratJalanService
 
         // Tidak ada image stamp di profil → QR Stamp (Nama, Jabatan, Tanggal Sign) dirender saat tampil/cetak.
         return [SuratJalanSigner::STAMP_QR, null];
+    }
+
+    /**
+     * Simpan tanda tangan hasil signature pad sebagai tanda tangan profil
+     * (storage/app/public/signature, dipakai juga modul Document & Ad-Hoc).
+     * File lama tidak dihapus karena bisa masih direferensikan dokumen lain.
+     */
+    private function saveSignatureToProfile(User $user, string $pngBinary): void
+    {
+        $filename = time() . '_' . Str::random(12) . '.png';
+        Storage::disk('public')->put('signature/' . $filename, $pngBinary);
+
+        $user->signature = $filename;
+        $user->save();
+
+        if ($user->employee) {
+            $user->employee->signature = $filename;
+            $user->employee->save();
+        }
     }
 
     private function decodePngDataUrl(string $dataUrl): string
@@ -432,7 +457,8 @@ class SuratJalanService
         }
         $this->sendMail($sj, $signer->user, $signer->signer_name, $actor, new SuratJalanNotification(
             SuratJalanNotification::TYPE_SIGN_REQUEST, $sj, $signer->signer_name,
-            route('surat-jalan.show', $sj->uuid), $signer->slotLabel()
+            // ?sign=1 → pop-up tanda tangan langsung terbuka saat signer membuka link email
+            route('surat-jalan.show', ['suratJalan' => $sj->uuid, 'sign' => 1]), $signer->slotLabel()
         ), ['slot' => $signer->slot, 'step' => $signer->step]);
     }
 

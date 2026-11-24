@@ -163,7 +163,7 @@
         <div class="col-md-6 col-xl-3">
           <div class="signer-card">
             <div class="fw-semibold">1. Diserahkan</div>
-            <small class="text-muted d-block mb-2">Pemohon / PIC — otomatis ter-sign saat submit</small>
+            <small class="text-muted d-block mb-2">Pemohon / PIC — tanda tangan lewat pop-up setelah klik Submit</small>
             <div class="fw-semibold">{{ $creatorProfile['name'] }}</div>
             <small class="d-block text-muted">{{ $creatorProfile['position'] ?? '-' }}{{ $creatorProfile['departement'] ? ' · ' . $creatorProfile['departement'] : '' }}</small>
             @if ($creatorHasStamp)
@@ -192,7 +192,7 @@
 
     <div class="card-footer d-flex flex-wrap justify-content-end gap-2 border-top pt-4">
       <button type="submit" class="btn btn-outline-secondary" data-action="draft"><i class="ri-save-line me-1"></i>Simpan Draft</button>
-      <button type="submit" class="btn btn-primary" data-action="submit"><i class="ri-send-plane-line me-1"></i>Submit &amp; Sign</button>
+      <button type="submit" class="btn btn-primary" data-action="submit"><i class="ri-quill-pen-line me-1"></i>Submit &amp; Tanda Tangan</button>
     </div>
   </div>
 </form>
@@ -290,10 +290,8 @@
           form.reportValidity();
           return;
         }
-        if (!confirm('Submit Surat Jalan sekarang?\n\nNomor akan diterbitkan, stamp Anda (Diserahkan) otomatis terpasang, dan email notifikasi dikirim ke Dept. Head. Dokumen tidak dapat diubah lagi.')) {
-          e.preventDefault();
-          return;
-        }
+        // Tidak perlu confirm di sini: draft disimpan lalu pop-up tanda tangan "Diserahkan" terbuka;
+        // submit baru terjadi saat pemohon menandatangani di pop-up tersebut.
       }
       form.querySelectorAll('button[type="submit"]').forEach(b => b.disabled = true);
     });

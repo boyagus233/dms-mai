@@ -530,15 +530,44 @@
                     openSignModal();
                 });
             } else if (f.signer_status === 'SIGNED') {
-                // Completed sign
+                // Completed sign - Tampilkan Gambar Tanda Tangan Asli
                 box.classList.add('signed');
-                box.innerHTML = `
-                    <div class="d-flex flex-column align-items-center justify-content-center h-100 p-1">
-                        <i class="ri-checkbox-circle-fill fs-6 text-success mb-1"></i>
-                        <span class="fw-bold" style="font-size: 10px; line-height: 1.1;">✓ Selesai</span>
-                        <small style="font-size: 9px;">${f.signer_name}</small>
-                    </div>
-                `;
+                box.style.background = 'rgba(255, 255, 255, 0.9)';
+                box.style.border = '1.5px dashed #28a745';
+
+                if (f.signature_url && (f.field_type === 'SIGNATURE' || f.field_type === 'INITIAL_PARAF')) {
+                    box.innerHTML = `
+                        <div class="d-flex flex-column align-items-center justify-content-center h-100 w-100 p-1 position-relative">
+                            <img src="${f.signature_url}" style="max-height: 75%; max-width: 95%; object-fit: contain; pointer-events: none;" alt="Tanda Tangan ${f.signer_name}">
+                            <div class="d-flex align-items-center gap-1 text-success fw-bold" style="font-size: 8px; line-height: 1; margin-top: 2px;">
+                                <i class="ri-checkbox-circle-fill" style="font-size: 9px;"></i>
+                                <span>${f.signer_name}</span>
+                            </div>
+                        </div>
+                    `;
+                } else if (f.field_type === 'SIGN_DATE') {
+                    box.innerHTML = `
+                        <div class="d-flex flex-column align-items-center justify-content-center h-100 w-100 p-1">
+                            <span class="fw-bold text-dark" style="font-size: 11px;">${f.signed_at_formatted || 'Signed'}</span>
+                            <small class="text-success" style="font-size: 8px;"><i class="ri-checkbox-circle-fill"></i> ${f.signer_name}</small>
+                        </div>
+                    `;
+                } else if (f.field_type === 'NAME_TITLE') {
+                    box.innerHTML = `
+                        <div class="d-flex flex-column align-items-center justify-content-center h-100 w-100 p-1">
+                            <span class="fw-bold text-dark" style="font-size: 11px;">${f.signer_name}</span>
+                            <small class="text-muted" style="font-size: 8px;">${f.signer_role}</small>
+                        </div>
+                    `;
+                } else {
+                    box.innerHTML = `
+                        <div class="d-flex flex-column align-items-center justify-content-center h-100 p-1">
+                            <i class="ri-checkbox-circle-fill fs-6 text-success mb-1"></i>
+                            <span class="fw-bold" style="font-size: 10px; line-height: 1.1;">✓ Ditandatangani</span>
+                            <small style="font-size: 9px;">${f.signer_name}</small>
+                        </div>
+                    `;
+                }
             } else {
                 // Waiting / Other signer
                 box.classList.add('waiting');

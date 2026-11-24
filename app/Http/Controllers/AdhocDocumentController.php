@@ -250,6 +250,13 @@ class AdhocDocumentController extends Controller
             $isMyField = $signer && $signer->user_id === $user->id;
             $isMyTurn = $isMyField && $mySignerRecord && $mySignerRecord->status === 'PENDING' && $document->status === 'IN_PROGRESS';
 
+            $signatureUrl = null;
+            if ($signer && $signer->status === 'SIGNED' && !empty($signer->signature_path)) {
+                if (Storage::disk('public')->exists('signature/' . $signer->signature_path)) {
+                    $signatureUrl = asset('storage/signature/' . $signer->signature_path);
+                }
+            }
+
             return [
                 'id' => $f->id,
                 'field_type' => $f->field_type,
@@ -262,6 +269,8 @@ class AdhocDocumentController extends Controller
                 'signer_name' => $signer?->user?->name ?? 'Signer',
                 'signer_role' => $signer?->role_name ?: 'Signer',
                 'signer_status' => $signer?->status ?? 'WAITING',
+                'signature_url' => $signatureUrl,
+                'signed_at_formatted' => $signer && $signer->signed_at ? $signer->signed_at->format('d/m/Y H:i') : null,
                 'is_my_field' => $isMyField,
                 'is_my_turn' => $isMyTurn,
             ];
@@ -338,6 +347,13 @@ class AdhocDocumentController extends Controller
             $isMyField = $f->document_signer_id == $signer->id;
             $isMyTurn = $isMyField && $signer->status === 'PENDING' && $document->status === 'IN_PROGRESS';
 
+            $signatureUrl = null;
+            if ($fSigner && $fSigner->status === 'SIGNED' && !empty($fSigner->signature_path)) {
+                if (Storage::disk('public')->exists('signature/' . $fSigner->signature_path)) {
+                    $signatureUrl = asset('storage/signature/' . $fSigner->signature_path);
+                }
+            }
+
             return [
                 'id' => $f->id,
                 'field_type' => $f->field_type,
@@ -350,6 +366,8 @@ class AdhocDocumentController extends Controller
                 'signer_name' => $fSigner?->user?->name ?? 'Signer',
                 'signer_role' => $fSigner?->role_name ?: 'Signer',
                 'signer_status' => $fSigner?->status ?? 'WAITING',
+                'signature_url' => $signatureUrl,
+                'signed_at_formatted' => $fSigner && $fSigner->signed_at ? $fSigner->signed_at->format('d/m/Y H:i') : null,
                 'is_my_field' => $isMyField,
                 'is_my_turn' => $isMyTurn,
             ];

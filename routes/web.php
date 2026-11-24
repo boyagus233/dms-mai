@@ -17,6 +17,7 @@ use App\Http\Controllers\DocumentTemplateController;
 use App\Http\Controllers\DepartementController;
 use App\Http\Controllers\PositionController;
 use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\VendorController;
 use App\Http\Controllers\DocumentUploadController;
 use App\Http\Controllers\DocumentRequestController;
 use App\Http\Controllers\DocumentAcknowledgeController;
@@ -146,6 +147,11 @@ Route::middleware(['auth'])->group(function () {
 
 Route::middleware(['auth'])->group(function () {
     Route::resource('employee', EmployeeController::class);
+});
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/vendor/export', [VendorController::class, 'export'])->name('vendor.export');
+    Route::resource('vendor', VendorController::class);
 });
 
 Route::middleware(['auth'])->group(function () {

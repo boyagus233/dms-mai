@@ -36,7 +36,7 @@
       "name": "Master Data",
       "icon": "menu-icon tf-icons ri-server-line",
       "slug": "master-data",
-      "group": "departement.index,position.index,employee.index",
+      "group": "departement.index,position.index,employee.index,vendor.index",
       "role": "ADM",
       "submenu": [
         {
@@ -53,6 +53,11 @@
           "url": "employee",
           "name": "Employee",
           "slug": "employee.index"
+        },
+        {
+          "url": "vendor",
+          "name": "Vendor",
+          "slug": "vendor.index"
         }
       ]
     },

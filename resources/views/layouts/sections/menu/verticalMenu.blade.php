@@ -19,10 +19,10 @@
   @php
     $user = Auth::user();
     // Convert to collection before filtering
-    if ($user->roles->contains('code', 'ADM')) {
+    if ($user && $user->roles && $user->roles->contains('code', 'ADM')) {
       $filteredMenus = collect($menuData[0]->menu);
     } else {
-      $filteredMenus = collect($menuData[0]->menu)->where('role', 'EMP');
+      $filteredMenus = collect($menuData[0]->menu ?? [])->where('role', 'EMP');
     }
 
   @endphp

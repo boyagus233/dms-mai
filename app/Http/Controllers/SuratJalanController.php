@@ -7,6 +7,7 @@ use App\Models\SuratJalan;
 use App\Models\SuratJalanItem;
 use App\Models\SuratJalanSigner;
 use App\Models\User;
+use App\Models\Vendor;
 use App\Services\DocumentAuditLogger;
 use App\Services\SuratJalanPdfService;
 use App\Services\SuratJalanService;
@@ -394,12 +395,16 @@ class SuratJalanController extends Controller
             ->limit(300)
             ->pluck('jenis_barang');
 
-        $kepadaSuggestions = SuratJalan::query()
+        $vendorNames = Vendor::active()->orderBy('name')->pluck('name')->toArray();
+        $pastKepada = SuratJalan::query()
             ->select('kepada')
             ->groupBy('kepada')
             ->orderByRaw('MAX(created_at) DESC')
             ->limit(200)
-            ->pluck('kepada');
+            ->pluck('kepada')
+            ->toArray();
+
+        $kepadaSuggestions = array_values(array_unique(array_filter(array_merge($vendorNames, $pastKepada))));
 
         return [
             'sj'                     => $sj,

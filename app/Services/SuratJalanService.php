@@ -37,7 +37,11 @@ class SuratJalanService
         if ($sj->isDraft()) {
             return false;
         }
-        return $sj->signers->contains('user_id', $user->id);
+        if ($sj->signers->contains('user_id', $user->id)) {
+            return true;
+        }
+        // Member grup (mis. HR-GA untuk kotak Pemeriksa) boleh memantau sejak dokumen di-submit.
+        return $sj->signers->contains(fn (SuratJalanSigner $s) => $s->isGroup() && $this->isGroupMember($user, $s->group_departement_id));
     }
 
     public function canEdit(SuratJalan $sj, User $user): bool
@@ -51,7 +55,50 @@ class SuratJalanService
             return false;
         }
         $current = $sj->currentSigner();
-        return $current && $current->user_id === $user->id;
+        return $current && $this->canActOn($sj, $current, $user);
+    }
+
+    /**
+     * Apakah $user boleh menandatangani / menolak kotak $signer.
+     * - Kotak perorangan: hanya user yang ditunjuk.
+     * - Kotak grup (Pemeriksa = HR-GA): siapa pun member aktif departemen grup, cukup satu orang,
+     *   asalkan ia belum menandatangani kotak lain di Surat Jalan yang sama (1 orang = 1 kotak).
+     */
+    public function canActOn(SuratJalan $sj, SuratJalanSigner $signer, User $user): bool
+    {
+        if (!$signer->isOpenGroup()) {
+            return $signer->user_id === $user->id;
+        }
+        if (!$this->isGroupMember($user, $signer->group_departement_id)) {
+            return false;
+        }
+        return !$sj->signers->contains(fn (SuratJalanSigner $s) => $s->id !== $signer->id
+            && $s->user_id === $user->id && $s->isSigned());
+    }
+
+    /** Member grup = user aktif yang departemen utamanya (m_employee.departement) = $departementId. */
+    public function isGroupMember(User $user, ?int $departementId): bool
+    {
+        return $departementId
+            && (bool) $user->is_active
+            && (int) $user->employee?->departement === (int) $departementId;
+    }
+
+    /** Daftar member aktif sebuah departemen (penerima notifikasi kotak grup). */
+    public function groupMembers(int $departementId)
+    {
+        return User::query()
+            ->where('users.is_active', 1)
+            ->whereHas('employee', fn ($q) => $q->where('departement', $departementId))
+            ->with(['employee.positions', 'employee.departements'])
+            ->orderBy('name')
+            ->get();
+    }
+
+    /** Departemen grup Pemeriksa (default kode 'HR' = HR-GA), dari config surat_jalan.pemeriksa_departement_code. */
+    public function pemeriksaDepartement(): ?Departement
+    {
+        return Departement::where('code', config('surat_jalan.pemeriksa_departement_code', 'HR'))->first();
     }
 
     /* ---------------------------------------------------------------------
@@ -147,12 +194,14 @@ class SuratJalanService
 
     private function syncSigners(SuratJalan $sj, User $creator, array $data): void
     {
+        // Kotak 3 (Pemeriksa) tidak ditujukan ke 1 orang: milik seluruh member HR-GA.
         $assignments = [
             1 => $creator->id,
             2 => (int) $data['signer_2'],
-            3 => (int) $data['signer_3'],
             4 => (int) $data['signer_4'],
         ];
+        $pemeriksaDept = $this->pemeriksaDepartement();
+        $this->ensure((bool) $pemeriksaDept, 'Departemen Pemeriksa (HR-GA) tidak ditemukan di master departemen.');
 
         $sj->signers()->delete();
         $users = User::with(['employee.positions', 'employee.departements'])
@@ -176,6 +225,17 @@ class SuratJalanService
                 'status'             => SuratJalanSigner::STATUS_WAITING,
             ]);
         }
+
+        $sj->signers()->create([
+            'step'                 => 3,
+            'slot'                 => config('surat_jalan.slots.3.code'),
+            'user_id'              => null,               // diisi oleh member HR-GA yang menandatangani
+            'group_departement_id' => $pemeriksaDept->id,
+            'signer_name'          => 'Member ' . $pemeriksaDept->name,
+            'signer_position'      => null,
+            'signer_departement'   => $pemeriksaDept->name,
+            'status'               => SuratJalanSigner::STATUS_WAITING,
+        ]);
         $sj->unsetRelation('signers');
     }
 
@@ -198,10 +258,12 @@ class SuratJalanService
             $locked = SuratJalan::whereKey($sj->id)->lockForUpdate()->first();
             $this->ensure($locked->isDraft(), 'Dokumen sudah pernah di-submit.');
 
-            $sj->sj_no = $this->generateNumber($sj);
-            $sj->sj_date = now()->toDateString();
+            // Satu titik waktu untuk nomor, tanggal SJ & waktu submit (konsisten di pergantian bulan).
+            $now = now();
+            $sj->sj_no = $this->generateNumber($sj, $now);
+            $sj->sj_date = $now->toDateString();
             $sj->status = SuratJalan::STATUS_IN_PROGRESS;
-            $sj->submitted_at = now();
+            $sj->submitted_at = $now;
             $sj->current_step = 2;
             $sj->updated_by = $user->id;
             $sj->save();
@@ -236,7 +298,9 @@ class SuratJalanService
             $this->ensure($locked->status === SuratJalan::STATUS_IN_PROGRESS, 'Dokumen tidak dalam proses approval.');
 
             $signer = $sj->signers()->where('status', SuratJalanSigner::STATUS_PENDING)->lockForUpdate()->first();
-            $this->ensure($signer && $signer->user_id === $user->id, 'Saat ini bukan giliran Anda untuk menandatangani dokumen ini.');
+            // Data signer terbaru (setelah lock) agar 2 member HR-GA yang menekan bersamaan tidak sama-sama lolos.
+            $sj->setRelation('signers', $sj->signers()->get());
+            $this->ensure($signer && $this->canActOn($sj, $signer, $user), $this->notYourTurnMessage($sj, $user));
 
             // Semua kotak boleh ditandatangani lewat signature pad (pop-up tanda tangan).
             $this->sign($sj, $signer, $user, $padDataUrl, $saveToProfile);
@@ -289,10 +353,18 @@ class SuratJalanService
             $this->ensure($locked->status === SuratJalan::STATUS_IN_PROGRESS, 'Dokumen tidak dalam proses approval.');
 
             $signer = $sj->signers()->where('status', SuratJalanSigner::STATUS_PENDING)->lockForUpdate()->first();
-            $this->ensure($signer && $signer->user_id === $user->id, 'Saat ini bukan giliran Anda untuk memproses dokumen ini.');
+            $sj->setRelation('signers', $sj->signers()->get());
+            $this->ensure($signer && $this->canActOn($sj, $signer, $user), $this->notYourTurnMessage($sj, $user));
 
             $request = request();
+            $profile = $this->profile($user);
             $signer->update([
+                // Kotak grup: catat member yang menolak sebagai pelaku.
+                'user_id'            => $user->id,
+                'employee_id'        => $profile['employee_id'],
+                'signer_name'        => $profile['name'],
+                'signer_position'    => $profile['position'],
+                'signer_departement' => $profile['departement'],
                 'status'     => SuratJalanSigner::STATUS_REJECTED,
                 'signed_at'  => now(),
                 'note'       => $reason,
@@ -336,6 +408,7 @@ class SuratJalanService
 
         $signer->update([
             'status'             => SuratJalanSigner::STATUS_SIGNED,
+            'user_id'            => $user->id,   // kotak grup: member yang benar-benar menandatangani
             'signer_name'        => $profile['name'],
             'signer_position'    => $profile['position'],
             'signer_departement' => $profile['departement'],
@@ -403,23 +476,29 @@ class SuratJalanService
     }
 
     /* ---------------------------------------------------------------------
-     |  Penomoran: SJ/{DEPT}/{YYYY}/{MM}/{XXXX}
+     |  Penomoran: {No Urut}/{DEPT}/MAI/{Bulan Romawi}/{Tahun}
+     |  Contoh 001/QA/MAI/XI/2026. No urut dihitung per departemen dan
+     |  mulai lagi dari 001 setiap bulan baru (bulan & tahun = tanggal submit).
      * ------------------------------------------------------------------- */
 
-    private function generateNumber(SuratJalan $sj): string
+    private const ROMAN_MONTHS = [1 => 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+
+    private function generateNumber(SuratJalan $sj, \DateTimeInterface $date): string
     {
         $dept = Departement::find($sj->departement_id);
-        $code = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $dept->code ?? 'GEN')) ?: 'GEN';
-        $prefix = config('surat_jalan.number_prefix') . "/{$code}/" . now()->format('Y/m') . '/';
-        $digits = (int) config('surat_jalan.number_digits', 4);
+        $deptCode = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $dept->code ?? 'GEN')) ?: 'GEN';
+        $company = strtoupper(config('surat_jalan.company_code', 'MAI'));
+        $suffix = '/' . implode('/', [$deptCode, $company, self::ROMAN_MONTHS[(int) $date->format('n')], $date->format('Y')]);
+        $digits = (int) config('surat_jalan.number_digits', 3);
 
-        // Dipanggil di dalam transaksi; lockForUpdate mengunci rentang nomor prefix ini.
-        $last = SuratJalan::where('sj_no', 'like', $prefix . '%')
+        // Dipanggil di dalam transaksi submit. No urut ada di depan, jadi nomor bulan ini
+        // dicari lewat akhiran "/QA/MAI/XI/2026" lalu diambil bagian pertamanya.
+        $last = SuratJalan::where('sj_no', 'like', '%' . $suffix)
             ->lockForUpdate()
-            ->selectRaw("MAX(CAST(SUBSTRING_INDEX(sj_no, '/', -1) AS UNSIGNED)) AS last_seq")
+            ->selectRaw("MAX(CAST(SUBSTRING_INDEX(sj_no, '/', 1) AS UNSIGNED)) AS last_seq")
             ->value('last_seq');
 
-        return $prefix . str_pad((string) (((int) $last) + 1), $digits, '0', STR_PAD_LEFT);
+        return str_pad((string) (((int) $last) + 1), $digits, '0', STR_PAD_LEFT) . $suffix;
     }
 
     /* ---------------------------------------------------------------------
@@ -450,11 +529,42 @@ class SuratJalanService
      |  Notifikasi email
      * ------------------------------------------------------------------- */
 
+    /** Pesan bila user tidak berhak; khusus kotak grup yang sudah diambil member lain. */
+    private function notYourTurnMessage(SuratJalan $sj, User $user): string
+    {
+        $taken = $sj->signers->first(fn (SuratJalanSigner $s) => $s->isGroup() && $s->user_id && $s->user_id !== $user->id
+            && $this->isGroupMember($user, $s->group_departement_id));
+
+        if ($taken) {
+            $verb = $taken->status === SuratJalanSigner::STATUS_REJECTED ? 'ditolak' : 'ditandatangani';
+            return "Kotak {$taken->slotLabel()} sudah {$verb} oleh " . rtrim($taken->signer_name, '.') . '.';
+        }
+
+        return 'Saat ini bukan giliran Anda untuk memproses dokumen ini.';
+    }
+
     private function notifySigner(SuratJalan $sj, ?SuratJalanSigner $signer, User $actor): void
     {
         if (!$signer) {
             return;
         }
+
+        // Kotak grup (Pemeriksa): kirim ke semua member HR-GA yang berhak menandatangani.
+        if ($signer->isOpenGroup()) {
+            $sj->loadMissing('signers');
+            foreach ($this->groupMembers($signer->group_departement_id) as $member) {
+                if (!$this->canActOn($sj, $signer, $member)) {
+                    continue;
+                }
+                $name = $this->profile($member)['name'];
+                $this->sendMail($sj, $member, $name, $actor, new SuratJalanNotification(
+                    SuratJalanNotification::TYPE_SIGN_REQUEST, $sj, $name,
+                    route('surat-jalan.show', ['suratJalan' => $sj->uuid, 'sign' => 1]), $signer->slotLabel()
+                ), ['slot' => $signer->slot, 'step' => $signer->step, 'group' => $signer->signer_departement]);
+            }
+            return;
+        }
+
         $this->sendMail($sj, $signer->user, $signer->signer_name, $actor, new SuratJalanNotification(
             SuratJalanNotification::TYPE_SIGN_REQUEST, $sj, $signer->signer_name,
             // ?sign=1 → pop-up tanda tangan langsung terbuka saat signer membuka link email

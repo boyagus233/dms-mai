@@ -22,6 +22,7 @@ class SuratJalanSigner extends Model
         'step',
         'slot',
         'user_id',
+        'group_departement_id',
         'employee_id',
         'signer_name',
         'signer_position',
@@ -47,6 +48,40 @@ class SuratJalanSigner extends Model
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function groupDepartement()
+    {
+        return $this->belongsTo(Departement::class, 'group_departement_id');
+    }
+
+    /** Kotak milik grup departemen (mis. Pemeriksa = semua member HR-GA). */
+    public function isGroup(): bool
+    {
+        return !empty($this->group_departement_id);
+    }
+
+    /** Kotak grup yang belum dieksekusi siapa pun (belum ada user_id). */
+    public function isOpenGroup(): bool
+    {
+        return $this->isGroup() && empty($this->user_id);
+    }
+
+    /**
+     * Kotak yang dapat ditangani $user: ditujukan langsung ke dia, atau kotak grup
+     * yang belum diambil siapa pun dan departemennya = departemen utama $user.
+     * Aturan "1 orang hanya 1 kotak per Surat Jalan" dicek terpisah di service.
+     */
+    public function scopeActionableBy($query, User $user)
+    {
+        $deptId = $user->employee?->departement;
+
+        return $query->where(function ($q) use ($user, $deptId) {
+            $q->where('user_id', $user->id);
+            if ($deptId) {
+                $q->orWhere(fn ($g) => $g->whereNull('user_id')->where('group_departement_id', $deptId));
+            }
+        });
     }
 
     public function slotLabel(): string

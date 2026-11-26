@@ -57,12 +57,15 @@ class SuratJalanController extends Controller
 
         switch ($scope) {
             case 'need_sign':
-                $query->where('status', SuratJalan::STATUS_IN_PROGRESS)
-                    ->whereHas('signers', fn ($q) => $q->where('user_id', $user->id)->where('status', SuratJalanSigner::STATUS_PENDING));
+                $query->awaitingActionBy($user);
                 break;
             case 'involved':
+                // Ditunjuk langsung, atau member grup kotak (mis. HR-GA untuk Pemeriksa).
+                $deptId = $user->employee?->departement;
                 $query->where('status', '<>', SuratJalan::STATUS_DRAFT)
-                    ->whereHas('signers', fn ($q) => $q->where('user_id', $user->id)->where('step', '>', 1));
+                    ->whereHas('signers', fn ($q) => $q->where('step', '>', 1)->where(fn ($s) => $s
+                        ->where('user_id', $user->id)
+                        ->when($deptId, fn ($s) => $s->orWhere('group_departement_id', $deptId))));
                 break;
             case 'all':
                 if (!$user->hasAnyRole(config('surat_jalan.viewer_roles', []))) {
@@ -336,8 +339,8 @@ class SuratJalanController extends Controller
             'items.*.qty'           => ['required', 'numeric', 'gt:0', 'max:9999999999'],
             'items.*.satuan'        => ['nullable', 'string', 'max:20'],
             'items.*.keterangan'    => ['nullable', 'string', 'max:255'],
+            // Pemeriksa (kotak 3) tidak dipilih: otomatis seluruh member HR-GA.
             'signer_2'              => ['required', 'integer', Rule::exists('users', 'id')->where('is_active', 1)],
-            'signer_3'              => ['required', 'integer', Rule::exists('users', 'id')->where('is_active', 1)],
             'signer_4'              => ['required', 'integer', Rule::exists('users', 'id')->where('is_active', 1)],
         ], [
             'kategori.required'          => 'Pilih minimal satu kategori / tujuan pengeluaran barang.',
@@ -346,7 +349,6 @@ class SuratJalanController extends Controller
             'items.*.qty.required'       => 'Qty pada setiap baris wajib diisi.',
             'items.*.qty.gt'             => 'Qty harus lebih dari 0.',
             'signer_2.required'          => 'Signer Mengetahui (Dept. Head) wajib dipilih.',
-            'signer_3.required'          => 'Signer Pemeriksa (HRD/GA) wajib dipilih.',
             'signer_4.required'          => 'Signer Diterima (Penerima/Security) wajib dipilih.',
         ]);
 
@@ -382,11 +384,11 @@ class SuratJalanController extends Controller
             'dept'      => $u->employee?->departements?->name,
         ])->values();
 
-        $pemeriksaCode = config('surat_jalan.pemeriksa_departement_code');
-        $pemeriksaOptions = $userOptions->where('dept_code', $pemeriksaCode)->values();
-        if ($pemeriksaOptions->isEmpty()) {
-            $pemeriksaOptions = $userOptions;
-        }
+        // Pemeriksa = seluruh member HR-GA (ditampilkan sebagai info, tidak dipilih).
+        $pemeriksaDept = $this->service->pemeriksaDepartement();
+        $pemeriksaMembers = $pemeriksaDept
+            ? $this->service->groupMembers($pemeriksaDept->id)->map(fn (User $u) => $this->service->profile($u)['name'])->values()
+            : collect();
 
         $jenisBarangSuggestions = SuratJalanItem::query()
             ->select('jenis_barang')
@@ -413,7 +415,8 @@ class SuratJalanController extends Controller
             'creatorProfile'         => $profile,
             'creatorHasStamp'        => $this->service->hasStampImage($user),
             'userOptions'            => $userOptions,
-            'pemeriksaOptions'       => $pemeriksaOptions,
+            'pemeriksaDept'          => $pemeriksaDept,
+            'pemeriksaMembers'       => $pemeriksaMembers,
             'jenisBarangSuggestions' => $jenisBarangSuggestions,
             'kepadaSuggestions'      => $kepadaSuggestions,
         ];
@@ -432,11 +435,8 @@ class SuratJalanController extends Controller
 
     private function pendingCount(User $user): int
     {
-        return SuratJalanSigner::query()
-            ->where('user_id', $user->id)
-            ->where('status', SuratJalanSigner::STATUS_PENDING)
-            ->whereHas('suratJalan', fn ($q) => $q->where('status', SuratJalan::STATUS_IN_PROGRESS))
-            ->count();
+        // Termasuk Surat Jalan yang menunggu Pemeriksa bila user member HR-GA.
+        return SuratJalan::query()->awaitingActionBy($user)->count();
     }
 
     private function fileName(SuratJalan $sj, string $prefix): string

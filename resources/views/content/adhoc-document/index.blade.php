@@ -40,6 +40,9 @@
                     <li class="nav-item">
                         <a class="nav-link {{ $tab === 'all' ? 'active' : '' }}" href="{{ route('adhoc-document.index', ['tab' => 'all']) }}">
                             <i class="ri-list-check me-1"></i> Semua Dokumen
+                            @if(!empty($isAdmin))
+                                <span class="badge bg-label-dark ms-1">All Users</span>
+                            @endif
                         </a>
                     </li>
                 </ul>

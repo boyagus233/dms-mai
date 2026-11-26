@@ -120,6 +120,8 @@ Route::middleware(['auth'])->group(function () {
 });
 
 Route::middleware(['auth'])->group(function () {
+    Route::get('/document-log/adhoc/export-all', [DocumentLogController::class, 'exportAllAdhoc'])->name('document-log.adhoc-export-all');
+    Route::get('/document-log/adhoc/{id}/logs', [DocumentLogController::class, 'getAdhocLogs'])->name('document-log.adhoc-logs');
     Route::get('/document-log/{id}/logs', [DocumentLogController::class, 'getLogs']);
     Route::get('/document-log/{id}/export', [DocumentLogController::class, 'export'])->name('document-log.export');
     Route::resource('document-log', DocumentLogController::class)->except(['show']);

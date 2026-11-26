@@ -23,12 +23,36 @@ class AdhocDocumentController extends Controller
     }
 
     /**
+     * Authorize document access: only creator, involved signer, or admin (ADM).
+     */
+    protected function authorizeDocumentAccess(AdhocDocument $document, ?User $user = null): void
+    {
+        $user = $user ?: Auth::user();
+        if (!$user) {
+            abort(401, 'Unauthenticated');
+        }
+
+        if ($user->hasRole('ADM') || (int) $document->created_by === (int) $user->id) {
+            return;
+        }
+
+        $isSigner = $document->relationLoaded('signers')
+            ? $document->signers->contains('user_id', $user->id)
+            : $document->signers()->where('user_id', $user->id)->exists();
+
+        if (!$isSigner) {
+            abort(403, 'Anda tidak memiliki akses ke dokumen ini.');
+        }
+    }
+
+    /**
      * Document Dashboard List
      */
     public function index(Request $request)
     {
         $user = Auth::user();
         $tab = $request->input('tab', 'my_requests');
+        $isAdmin = $user->hasRole('ADM');
 
         $myRequestsQuery = AdhocDocument::where('created_by', $user->id)
             ->with(['signers.user', 'creator'])
@@ -42,6 +66,14 @@ class AdhocDocumentController extends Controller
             ->latest();
 
         $allDocsQuery = AdhocDocument::with(['signers.user', 'creator'])
+            ->when(!$isAdmin, function ($query) use ($user) {
+                $query->where(function ($q) use ($user) {
+                    $q->where('created_by', $user->id)
+                        ->orWhereHas('signers', function ($sq) use ($user) {
+                            $sq->where('user_id', $user->id);
+                        });
+                });
+            })
             ->latest();
 
         $myRequestsCount = $myRequestsQuery->count();
@@ -53,7 +85,7 @@ class AdhocDocumentController extends Controller
             default => $myRequestsQuery->paginate(15),
         };
 
-        return view('content.adhoc-document.index', compact('documents', 'tab', 'myRequestsCount', 'needSignCount'));
+        return view('content.adhoc-document.index', compact('documents', 'tab', 'myRequestsCount', 'needSignCount', 'isAdmin'));
     }
 
     /**
@@ -191,7 +223,7 @@ class AdhocDocumentController extends Controller
     {
         $document = AdhocDocument::where('uuid', $uuid)->firstOrFail();
 
-        if ($document->created_by !== Auth::id()) {
+        if ((int) $document->created_by !== (int) Auth::id() && (!Auth::user() || !Auth::user()->hasRole('ADM'))) {
             abort(403, 'Unauthorized');
         }
 
@@ -235,6 +267,7 @@ class AdhocDocumentController extends Controller
             ->firstOrFail();
 
         $user = Auth::user();
+        $this->authorizeDocumentAccess($document, $user);
         $mySignerRecord = $document->signers->firstWhere('user_id', $user->id);
         $myFields = $mySignerRecord ? $document->fields->where('document_signer_id', $mySignerRecord->id)->values() : collect();
 
@@ -425,9 +458,11 @@ class AdhocDocumentController extends Controller
     /**
      * Button 1: Download Clean Signed Document PDF
      */
-    public function downloadSigned(string $uuid)
+    public function downloadSigned(Request $request, string $uuid)
     {
         $document = AdhocDocument::where('uuid', $uuid)->firstOrFail();
+        $user = Auth::user();
+        $this->authorizeDocumentAccess($document, $user);
 
         $filePath = $document->signed_file_path ?: $document->original_file_path;
         $fullPath = storage_path('app/public/' . $filePath);
@@ -435,6 +470,17 @@ class AdhocDocumentController extends Controller
         if (!file_exists($fullPath)) {
             abort(404, 'File dokumen tidak ditemukan.');
         }
+
+        $isAdminAccess = $user->hasRole('ADM') && (int) $document->created_by !== (int) $user->id;
+        $this->signerService->logAudit(
+            $document->id,
+            $user->id,
+            $user->name,
+            $user->email,
+            'DOWNLOADED',
+            "PDF dokumen diunduh oleh {$user->name}" . ($isAdminAccess ? ' (Admin Access)' : ''),
+            $request
+        );
 
         $downloadName = 'Signed_' . pathinfo($document->original_file_name, PATHINFO_FILENAME) . '.pdf';
         return response()->download($fullPath, $downloadName, [
@@ -448,6 +494,8 @@ class AdhocDocumentController extends Controller
     public function exportAuditCsv(string $uuid)
     {
         $document = AdhocDocument::where('uuid', $uuid)->with('auditLogs')->firstOrFail();
+        $this->authorizeDocumentAccess($document);
+
         $safeTitle = preg_replace('/[^A-Za-z0-9_-]/', '_', $document->title);
         $fileName = 'Audit_Trail_' . $safeTitle . '_' . date('Ymd_His') . '.csv';
 
@@ -497,18 +545,7 @@ class AdhocDocumentController extends Controller
     public function viewPdf(string $uuid)
     {
         $document = AdhocDocument::where('uuid', $uuid)->firstOrFail();
-
-        // Security: user must be authenticated and either creator, signer, or admin
-        $user = Auth::user();
-        if (!$user) {
-            abort(401, 'Unauthenticated');
-        }
-        $isSigner = $document->signers()->where('user_id', $user->id)->exists();
-        $isAdmin = $user->hasRole('ADM');
-
-        if ($document->created_by !== $user->id && !$isSigner && !$isAdmin) {
-            abort(403, 'Unauthorized access to document.');
-        }
+        $this->authorizeDocumentAccess($document);
 
         $filePath = $document->signed_file_path ?: $document->original_file_path;
         $fullPath = storage_path('app/public/' . $filePath);
@@ -529,6 +566,7 @@ class AdhocDocumentController extends Controller
     public function signatureImage(string $uuid, int $signerId)
     {
         $document = AdhocDocument::where('uuid', $uuid)->firstOrFail();
+        $this->authorizeDocumentAccess($document);
         $signer = $document->signers()->findOrFail($signerId);
 
         if (empty($signer->signature_path)) {

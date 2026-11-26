@@ -449,6 +449,8 @@
                                                 <span class="badge bg-danger">Rejected</span>
                                             @elseif($log->action === 'COMPLETED')
                                                 <span class="badge bg-primary">Completed</span>
+                                            @elseif($log->action === 'DOWNLOADED')
+                                                <span class="badge bg-label-primary">Downloaded</span>
                                             @else
                                                 <span class="badge bg-label-info">{{ $log->action }}</span>
                                             @endif

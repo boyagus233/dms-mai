@@ -552,21 +552,11 @@ class AdhocSignerService
     }
 
     /**
-     * Generate standalone Certificate of Completion (Audit History PDF)
+     * Render Certificate of Completion / Audit Log History HTML (Pola A: core approval events only).
      */
-    public function generateAuditCertificatePdf(AdhocDocument $document): string
+    protected function renderAuditCertificateHtml(AdhocDocument $document, ?User $generatedBy = null): string
     {
         $document->load(['creator', 'signers.user.employee.positions', 'signers.user.employee.departements', 'auditLogs']);
-
-        $pdf = new TCPDF(PDF_PAGE_ORIENTATION, PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false);
-        $pdf->SetCreator('Internal DMS E-Sign System');
-        $pdf->SetAuthor('SYS-DOCS');
-        $pdf->SetTitle('Certificate of Completion - ' . $document->title);
-        $pdf->SetMargins(15, 15, 15);
-        $pdf->SetAutoPageBreak(true, 15);
-        $pdf->setPrintHeader(false);
-        $pdf->setPrintFooter(false);
-        $pdf->AddPage();
 
         $statusColor = match ($document->status) {
             'COMPLETED' => '#28c76f',
@@ -575,15 +565,86 @@ class AdhocSignerService
             default => '#82868b'
         };
 
-        // Render HTML Content
-        $html = view('content.adhoc-document.certificate', [
+        // Pola A: Keep PDF audit attachment concise on approval workflow events;
+        // DOWNLOADED events remain recorded in database, web timeline, and CSV exports.
+        $auditEvents = $document->auditLogs
+            ->where('action', '!=', 'DOWNLOADED')
+            ->values();
+
+        return view('content.adhoc-document.certificate', [
             'document' => $document,
             'statusColor' => $statusColor,
+            'auditEvents' => $auditEvents,
+            'generatedBy' => $generatedBy?->name,
         ])->render();
+    }
 
+    /**
+     * Generate standalone Certificate of Completion (Audit History PDF)
+     */
+    public function generateAuditCertificatePdf(AdhocDocument $document, ?User $generatedBy = null): string
+    {
+        $pdf = new TCPDF(PDF_PAGE_ORIENTATION, PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false);
+        $pdf->SetCreator('Internal DMS E-Sign System');
+        $pdf->SetAuthor('SYS-DOCS');
+        $pdf->SetTitle('Certificate of Completion - ' . $document->title);
+        $pdf->SetMargins(12, 10, 12);
+        $pdf->SetAutoPageBreak(true, 10);
+        $pdf->SetFont('helvetica', '', 9);
+        $pdf->SetTextColor(43, 43, 43);
+        $pdf->setPrintHeader(false);
+        $pdf->setPrintFooter(false);
+        $pdf->AddPage();
+
+        $html = $this->renderAuditCertificateHtml($document, $generatedBy);
         $pdf->writeHTML($html, true, false, true, false, '');
 
-        $pdfContent = $pdf->Output('certificate_' . $document->uuid . '.pdf', 'S');
-        return $pdfContent;
+        return $pdf->Output('certificate_' . $document->uuid . '.pdf', 'S');
+    }
+
+    /**
+     * Combine Signed PDF pages with Certificate of Completion / Audit Log History at the end.
+     */
+    public function generateSignedPdfWithAuditTrail(AdhocDocument $document, ?User $downloadedBy = null): string
+    {
+        $filePath = $document->signed_file_path ?: $document->original_file_path;
+        $sourcePdfPath = $filePath ? storage_path('app/public/' . $filePath) : '';
+
+        if (empty($sourcePdfPath) || !file_exists($sourcePdfPath)) {
+            throw new Exception('File PDF dokumen tidak ditemukan.');
+        }
+
+        $pdf = new Fpdi();
+        $pdf->SetCreator('Internal DMS E-Sign System');
+        $pdf->SetAuthor('SYS-DOCS');
+        $pdf->SetTitle($document->title . ' - Signed & Audit Trail');
+        $pdf->setPrintHeader(false);
+        $pdf->setPrintFooter(false);
+        $pdf->SetAutoPageBreak(false);
+
+        $pageCount = $pdf->setSourceFile($sourcePdfPath);
+        for ($pageNum = 1; $pageNum <= $pageCount; $pageNum++) {
+            $templateId = $pdf->importPage($pageNum);
+            $size = $pdf->getTemplateSize($templateId);
+
+            $pageWidth = $size['width'];
+            $pageHeight = $size['height'];
+            $orientation = ($pageWidth > $pageHeight) ? 'L' : 'P';
+
+            $pdf->AddPage($orientation, [$pageWidth, $pageHeight]);
+            $pdf->useTemplate($templateId, 0, 0, $pageWidth, $pageHeight);
+        }
+
+        // Append Audit Log History page(s) in A4 portrait at the end
+        $pdf->SetMargins(12, 10, 12);
+        $pdf->SetAutoPageBreak(true, 10);
+        $pdf->SetFont('helvetica', '', 9);
+        $pdf->SetTextColor(43, 43, 43);
+        $pdf->AddPage('P', 'A4');
+
+        $html = $this->renderAuditCertificateHtml($document, $downloadedBy);
+        $pdf->writeHTML($html, true, false, true, false, '');
+
+        return $pdf->Output('signed_with_audit_' . $document->uuid . '.pdf', 'S');
     }
 }

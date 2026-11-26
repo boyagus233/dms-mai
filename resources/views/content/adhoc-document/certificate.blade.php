@@ -2,58 +2,58 @@
     body {
         font-family: helvetica, sans-serif;
         color: #2b2b2b;
-        font-size: 10pt;
-        line-height: 1.4;
+        font-size: 9pt;
+        line-height: 1.25;
     }
     .header-table {
         width: 100%;
         border-bottom: 2px solid #666cff;
-        padding-bottom: 10px;
-        margin-bottom: 15px;
+        padding-bottom: 6px;
+        margin-bottom: 8px;
     }
     .title {
-        font-size: 18pt;
+        font-size: 15pt;
         font-weight: bold;
         color: #666cff;
         margin: 0;
     }
     .subtitle {
-        font-size: 10pt;
+        font-size: 9pt;
         color: #777;
     }
     .badge {
         font-weight: bold;
-        padding: 4px 10px;
+        padding: 3px 8px;
         color: #ffffff;
-        font-size: 9pt;
+        font-size: 8.5pt;
         text-align: center;
     }
     .section-title {
-        font-size: 11pt;
+        font-size: 10pt;
         font-weight: bold;
         color: #333333;
         border-bottom: 1px solid #e0e0e0;
-        padding-bottom: 4px;
-        margin-top: 15px;
-        margin-bottom: 8px;
+        padding-bottom: 3px;
+        margin-top: 8px;
+        margin-bottom: 5px;
     }
     table.data-table {
         width: 100%;
         border-collapse: collapse;
-        margin-bottom: 15px;
+        margin-bottom: 8px;
     }
     table.data-table th {
         background-color: #f4f5f9;
         font-weight: bold;
         border: 1px solid #d9d9d9;
-        padding: 6px;
-        font-size: 8.5pt;
+        padding: 4px 5px;
+        font-size: 8pt;
         color: #444;
     }
     table.data-table td {
         border: 1px solid #d9d9d9;
-        padding: 5px 6px;
-        font-size: 8pt;
+        padding: 3px 5px;
+        font-size: 7.5pt;
     }
     .hash-code {
         font-family: courier, monospace;
@@ -62,11 +62,11 @@
         word-break: break-all;
     }
     .footer {
-        font-size: 7.5pt;
+        font-size: 7pt;
         color: #888;
         border-top: 1px solid #e0e0e0;
-        padding-top: 6px;
-        margin-top: 25px;
+        padding-top: 5px;
+        margin-top: 10px;
         text-align: center;
     }
 </style>
@@ -79,13 +79,16 @@
         </td>
         <td width="30%" align="right">
             <span style="font-weight: bold; font-size: 11pt; color: {{ $statusColor }};">STATUS: {{ $document->status }}</span><br>
-            <span style="font-size: 8pt; color: #777;">Generated on: {{ now()->format('d/m/Y H:i:s') }}</span>
+            <span style="font-size: 8pt; color: #777;">Downloaded / Generated: {{ now()->format('d/m/Y H:i:s') }} WIB</span>
+            @if(!empty($generatedBy))
+                <br><span style="font-size: 8pt; color: #777;">By: {{ $generatedBy }}</span>
+            @endif
         </td>
     </tr>
 </table>
 
 <div class="section-title">1. Document Information &amp; Digital Integrity</div>
-<table cellpadding="4" cellspacing="0" style="width: 100%; font-size: 8.5pt;">
+<table cellpadding="2" cellspacing="0" style="width: 100%; font-size: 8pt;">
     <tr>
         <td width="22%"><strong>Document Title:</strong></td>
         <td width="78%">{{ $document->title }}</td>
@@ -117,7 +120,7 @@
 </table>
 
 <div class="section-title">2. Signer Summary (Daftar Penanda Tangan)</div>
-<table class="data-table" cellpadding="5" cellspacing="0">
+<table class="data-table" cellpadding="3" cellspacing="0">
     <thead>
         <tr>
             <th width="8%" align="center">Urutan</th>
@@ -157,20 +160,23 @@
 </table>
 
 <div class="section-title">3. Chronological Event Log (Riwayat Audit Terinci)</div>
-<table class="data-table" cellpadding="4" cellspacing="0">
+<table class="data-table" cellpadding="3" cellspacing="0">
     <thead>
         <tr>
-            <th width="18%">Waktu (WIB)</th>
-            <th width="16%">Aksi / Event</th>
+            <th width="15%">Waktu (WIB)</th>
+            <th width="14%">Aksi / Event</th>
             <th width="22%">Pelaku (Actor)</th>
-            <th width="14%">IP Address</th>
-            <th width="30%">Keterangan &amp; Metadata</th>
+            <th width="12%">IP Address</th>
+            <th width="37%">Keterangan &amp; Metadata</th>
         </tr>
     </thead>
     <tbody>
-        @forelse($document->auditLogs as $log)
+        @php
+            $logsToDisplay = $auditEvents ?? $document->auditLogs->where('action', '!=', 'DOWNLOADED');
+        @endphp
+        @forelse($logsToDisplay as $log)
         <tr>
-            <td>{{ $log->created_at->format('d/m/Y H:i:s') }}</td>
+            <td>{{ $log->created_at ? $log->created_at->format('d/m/Y H:i:s') : '-' }}</td>
             <td><strong>{{ $log->action }}</strong></td>
             <td>{{ $log->actor_name }}<br><span style="font-size: 7pt; color: #666;">{{ $log->actor_email }}</span></td>
             <td>{{ $log->ip_address ?: '-' }}</td>

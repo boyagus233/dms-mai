@@ -355,6 +355,7 @@ Route::middleware(['auth'])->prefix('adhoc-document')->name('adhoc-document.')->
     Route::post('/{uuid}/sign', [AdhocDocumentController::class, 'sign'])->name('sign');
     Route::post('/{uuid}/reject', [AdhocDocumentController::class, 'reject'])->name('reject');
     Route::get('/{uuid}/download-signed', [AdhocDocumentController::class, 'downloadSigned'])->name('download-signed');
+    Route::get('/{uuid}/download-with-audit', [AdhocDocumentController::class, 'downloadWithAudit'])->name('download-with-audit');
     Route::get('/{uuid}/download-audit-history', [AdhocDocumentController::class, 'downloadAuditHistory'])->name('download-audit-history');
     Route::get('/{uuid}/export-audit-csv', [AdhocDocumentController::class, 'exportAuditCsv'])->name('export-audit-csv');
     Route::get('/{uuid}/signature/{signerId}', [AdhocDocumentController::class, 'signatureImage'])->name('signature-image');

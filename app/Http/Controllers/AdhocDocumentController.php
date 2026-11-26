@@ -456,6 +456,23 @@ class AdhocDocumentController extends Controller
     }
 
     /**
+     * Record DOWNLOADED event to document_audit_logs with Admin Access indicator when applicable.
+     */
+    protected function recordDownloadAudit(AdhocDocument $document, User $user, string $variantLabel, Request $request): void
+    {
+        $isAdminAccess = $user->hasRole('ADM') && (int) $document->created_by !== (int) $user->id;
+        $this->signerService->logAudit(
+            $document->id,
+            $user->id,
+            $user->name,
+            $user->email,
+            'DOWNLOADED',
+            "{$variantLabel} diunduh oleh {$user->name}" . ($isAdminAccess ? ' (Admin Access)' : ''),
+            $request
+        );
+    }
+
+    /**
      * Button 1: Download Clean Signed Document PDF
      */
     public function downloadSigned(Request $request, string $uuid)
@@ -471,20 +488,40 @@ class AdhocDocumentController extends Controller
             abort(404, 'File dokumen tidak ditemukan.');
         }
 
-        $isAdminAccess = $user->hasRole('ADM') && (int) $document->created_by !== (int) $user->id;
-        $this->signerService->logAudit(
-            $document->id,
-            $user->id,
-            $user->name,
-            $user->email,
-            'DOWNLOADED',
-            "PDF dokumen diunduh oleh {$user->name}" . ($isAdminAccess ? ' (Admin Access)' : ''),
-            $request
-        );
+        $this->recordDownloadAudit($document, $user, 'PDF dokumen (Clean Signed)', $request);
 
         $downloadName = 'Signed_' . pathinfo($document->original_file_name, PATHINFO_FILENAME) . '.pdf';
         return response()->download($fullPath, $downloadName, [
             'Content-Type' => 'application/pdf',
+        ]);
+    }
+
+    /**
+     * Button 1B: Download Signed Document PDF combined with Audit Log History page(s)
+     */
+    public function downloadWithAudit(Request $request, string $uuid)
+    {
+        $document = AdhocDocument::where('uuid', $uuid)->firstOrFail();
+        $user = Auth::user();
+        $this->authorizeDocumentAccess($document, $user);
+
+        try {
+            $pdfBinary = $this->signerService->generateSignedPdfWithAuditTrail($document, $user);
+        } catch (Exception $e) {
+            Log::error('Failed generating signed PDF with audit trail: ' . $e->getMessage());
+            abort(404, $e->getMessage());
+        }
+
+        $this->recordDownloadAudit($document, $user, 'PDF dokumen + Audit Trail', $request);
+
+        $downloadName = 'Signed_' . pathinfo($document->original_file_name, PATHINFO_FILENAME) . '_Audit_Trail.pdf';
+        $safeDownloadName = str_replace(['"', "\r", "\n"], '', $downloadName);
+
+        return response($pdfBinary, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . $safeDownloadName . '"',
+            'Content-Length' => strlen($pdfBinary),
+            'Cache-Control' => 'no-store, no-cache, must-revalidate',
         ]);
     }
 

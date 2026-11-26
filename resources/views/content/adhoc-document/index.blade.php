@@ -91,8 +91,11 @@
                                         @endif
 
                                         @if($doc->status === 'COMPLETED' || $doc->signed_file_path)
-                                        <a href="{{ route('adhoc-document.download-signed', ['uuid' => $doc->uuid]) }}" class="btn btn-sm btn-icon btn-outline-success" title="Download Signed PDF">
+                                        <a href="{{ route('adhoc-document.download-signed', ['uuid' => $doc->uuid]) }}" class="btn btn-sm btn-icon btn-outline-success" title="Download Signed PDF (Clean)">
                                             <i class="ri-download-2-line"></i>
+                                        </a>
+                                        <a href="{{ route('adhoc-document.download-with-audit', ['uuid' => $doc->uuid]) }}" class="btn btn-sm btn-icon btn-success" title="Download Signed PDF + Audit Log History">
+                                            <i class="ri-shield-check-line"></i>
                                         </a>
                                         @endif
 

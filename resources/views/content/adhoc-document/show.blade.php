@@ -155,11 +155,15 @@
                 </a>
                 @endif
 
-                <!-- Download Signed Document (only when completed) -->
+                <!-- Download Signed Document (Clean vs + Audit Log History) -->
                 @if($document->status === 'COMPLETED' || $document->signed_file_path)
-                <a href="{{ route('adhoc-document.download-signed', ['uuid' => $document->uuid]) }}" class="btn btn-success d-flex align-items-center gap-1 shadow-sm">
+                <a href="{{ route('adhoc-document.download-signed', ['uuid' => $document->uuid]) }}" class="btn btn-outline-success d-flex align-items-center gap-1" title="Unduh dokumen bertanda tangan saja (tanpa halaman audit)">
                     <i class="ri-download-2-line fs-5"></i>
-                    <span>Download Signed Document</span>
+                    <span>Download Signed PDF</span>
+                </a>
+                <a href="{{ route('adhoc-document.download-with-audit', ['uuid' => $document->uuid]) }}" class="btn btn-success d-flex align-items-center gap-1 shadow-sm" title="Unduh dokumen bertanda tangan beserta halaman Audit Log History di akhir PDF">
+                    <i class="ri-shield-check-line fs-5"></i>
+                    <span>Download PDF + Audit Log</span>
                 </a>
                 @else
                 <button type="button" class="btn btn-outline-secondary disabled" title="Dokumen belum selesai ditandatangani">

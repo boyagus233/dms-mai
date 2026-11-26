@@ -198,10 +198,12 @@ class SuratJalanService
             $locked = SuratJalan::whereKey($sj->id)->lockForUpdate()->first();
             $this->ensure($locked->isDraft(), 'Dokumen sudah pernah di-submit.');
 
-            $sj->sj_no = $this->generateNumber($sj);
-            $sj->sj_date = now()->toDateString();
+            // Satu titik waktu untuk nomor, tanggal SJ & waktu submit (konsisten di pergantian bulan).
+            $now = now();
+            $sj->sj_no = $this->generateNumber($sj, $now);
+            $sj->sj_date = $now->toDateString();
             $sj->status = SuratJalan::STATUS_IN_PROGRESS;
-            $sj->submitted_at = now();
+            $sj->submitted_at = $now;
             $sj->current_step = 2;
             $sj->updated_by = $user->id;
             $sj->save();
@@ -403,23 +405,29 @@ class SuratJalanService
     }
 
     /* ---------------------------------------------------------------------
-     |  Penomoran: SJ/{DEPT}/{YYYY}/{MM}/{XXXX}
+     |  Penomoran: {No Urut}/{DEPT}/MAI/{Bulan Romawi}/{Tahun}
+     |  Contoh 001/QA/MAI/XI/2026. No urut dihitung per departemen dan
+     |  mulai lagi dari 001 setiap bulan baru (bulan & tahun = tanggal submit).
      * ------------------------------------------------------------------- */
 
-    private function generateNumber(SuratJalan $sj): string
+    private const ROMAN_MONTHS = [1 => 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+
+    private function generateNumber(SuratJalan $sj, \DateTimeInterface $date): string
     {
         $dept = Departement::find($sj->departement_id);
-        $code = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $dept->code ?? 'GEN')) ?: 'GEN';
-        $prefix = config('surat_jalan.number_prefix') . "/{$code}/" . now()->format('Y/m') . '/';
-        $digits = (int) config('surat_jalan.number_digits', 4);
+        $deptCode = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $dept->code ?? 'GEN')) ?: 'GEN';
+        $company = strtoupper(config('surat_jalan.company_code', 'MAI'));
+        $suffix = '/' . implode('/', [$deptCode, $company, self::ROMAN_MONTHS[(int) $date->format('n')], $date->format('Y')]);
+        $digits = (int) config('surat_jalan.number_digits', 3);
 
-        // Dipanggil di dalam transaksi; lockForUpdate mengunci rentang nomor prefix ini.
-        $last = SuratJalan::where('sj_no', 'like', $prefix . '%')
+        // Dipanggil di dalam transaksi submit. No urut ada di depan, jadi nomor bulan ini
+        // dicari lewat akhiran "/QA/MAI/XI/2026" lalu diambil bagian pertamanya.
+        $last = SuratJalan::where('sj_no', 'like', '%' . $suffix)
             ->lockForUpdate()
-            ->selectRaw("MAX(CAST(SUBSTRING_INDEX(sj_no, '/', -1) AS UNSIGNED)) AS last_seq")
+            ->selectRaw("MAX(CAST(SUBSTRING_INDEX(sj_no, '/', 1) AS UNSIGNED)) AS last_seq")
             ->value('last_seq');
 
-        return $prefix . str_pad((string) (((int) $last) + 1), $digits, '0', STR_PAD_LEFT);
+        return str_pad((string) (((int) $last) + 1), $digits, '0', STR_PAD_LEFT) . $suffix;
     }
 
     /* ---------------------------------------------------------------------

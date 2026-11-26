@@ -17,9 +17,10 @@ return [
 
     'default_location' => 'Karawang',
 
-    // Prefix nomor: SJ/{KODE_DEPT}/{YYYY}/{MM}/{XXXX} — urut ulang tiap departemen per bulan.
-    'number_prefix' => 'SJ',
-    'number_digits' => 4,
+    // Format nomor: {No Urut}/{KODE_DEPT}/{KODE_PERUSAHAAN}/{Bulan Romawi}/{Tahun}
+    // Contoh: 001/QA/MAI/XI/2026 — no urut per departemen, mulai lagi dari 001 setiap bulan baru.
+    'company_code'  => env('SJ_COMPANY_CODE', 'MAI'),
+    'number_digits' => 3,
 
     // Kode m_departement yang dipakai untuk menyaring pilihan signer slot Pemeriksa (HRD/GA).
     'pemeriksa_departement_code' => env('SJ_PEMERIKSA_DEPT', 'HR'),

@@ -8,7 +8,6 @@
   $kategoriSel = old('kategori', $isEdit ? (array) $sj->kategori : []);
   $signerSel = [
       2 => old('signer_2', $isEdit ? $sj->signerForStep(2)?->user_id : null),
-      3 => old('signer_3', $isEdit ? $sj->signerForStep(3)?->user_id : null),
       4 => old('signer_4', $isEdit ? $sj->signerForStep(4)?->user_id : null),
   ];
   $optLabel = fn ($u) => $u['name'] . ($u['position'] ? ' — ' . $u['position'] : '') . ($u['dept'] ? ' (' . $u['dept'] . ')' : '') . ' · ' . $u['nik'];
@@ -173,18 +172,33 @@
             @endif
           </div>
         </div>
-        @foreach ([2 => ['Mengetahui', 'Dept. Head', $userOptions], 3 => ['Pemeriksa', 'Personal HRD / GA', $pemeriksaOptions], 4 => ['Diterima', 'Penerima / Security Gate', $userOptions]] as $step => [$label, $hint, $options])
+        @foreach ([2 => ['Mengetahui', 'Dept. Head'], 3 => ['Pemeriksa', 'Personal HRD / GA'], 4 => ['Diterima', 'Penerima / Security Gate']] as $step => [$label, $hint])
           <div class="col-md-6 col-xl-3">
-            <div class="signer-card">
-              <label class="fw-semibold d-block" for="signer_{{ $step }}">{{ $step }}. {{ $label }} <span class="text-danger">*</span></label>
-              <small class="text-muted d-block mb-2">{{ $hint }}</small>
-              <select name="signer_{{ $step }}" id="signer_{{ $step }}" class="form-select signer-select @error('signer_' . $step) is-invalid @enderror" required>
-                <option value="">— Pilih {{ $label }} —</option>
-                @foreach ($options as $u)
-                  <option value="{{ $u['id'] }}" @selected((string) $signerSel[$step] === (string) $u['id'])>{{ $optLabel($u) }}</option>
-                @endforeach
-              </select>
-            </div>
+            @if ($step === 3)
+              {{-- Pemeriksa tidak dipilih: seluruh member HR-GA bisa menandatangani, cukup satu orang --}}
+              <div class="signer-card">
+                <div class="fw-semibold">3. {{ $label }}</div>
+                <small class="text-muted d-block mb-2">{{ $hint }}</small>
+                <div class="fw-semibold">Semua member {{ $pemeriksaDept?->name ?? 'HR-GA' }}</div>
+                <small class="d-block text-muted">Cukup 1 orang yang menandatangani; bisa saling mewakilkan.</small>
+                @if ($pemeriksaMembers->isNotEmpty())
+                  <span class="badge bg-label-info mt-2" title="{{ $pemeriksaMembers->implode(', ') }}">{{ $pemeriksaMembers->count() }} member</span>
+                @else
+                  <span class="badge bg-label-danger mt-2">Belum ada member aktif</span>
+                @endif
+              </div>
+            @else
+              <div class="signer-card">
+                <label class="fw-semibold d-block" for="signer_{{ $step }}">{{ $step }}. {{ $label }} <span class="text-danger">*</span></label>
+                <small class="text-muted d-block mb-2">{{ $hint }}</small>
+                <select name="signer_{{ $step }}" id="signer_{{ $step }}" class="form-select signer-select @error('signer_' . $step) is-invalid @enderror" required>
+                  <option value="">— Pilih {{ $label }} —</option>
+                  @foreach ($userOptions as $u)
+                    <option value="{{ $u['id'] }}" @selected((string) $signerSel[$step] === (string) $u['id'])>{{ $optLabel($u) }}</option>
+                  @endforeach
+                </select>
+              </div>
+            @endif
           </div>
         @endforeach
       </div>

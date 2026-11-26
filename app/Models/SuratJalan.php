@@ -83,6 +83,30 @@ class SuratJalan extends Model
             ->orderBy('id');
     }
 
+    /**
+     * Surat Jalan yang sedang menunggu tanda tangan $user:
+     * kotak aktif ditujukan langsung ke dia, atau kotak grup (mis. Pemeriksa HR-GA) milik
+     * departemennya yang belum diambil siapa pun — kecuali ia sudah menandatangani kotak lain
+     * di Surat Jalan yang sama (1 orang = 1 kotak).
+     */
+    public function scopeAwaitingActionBy($query, User $user)
+    {
+        $deptId = $user->employee?->departement;
+
+        return $query->where('status', self::STATUS_IN_PROGRESS)
+            ->where(function ($w) use ($user, $deptId) {
+                $w->whereHas('signers', fn ($q) => $q->where('status', SuratJalanSigner::STATUS_PENDING)->where('user_id', $user->id));
+
+                if ($deptId) {
+                    $w->orWhere(fn ($g) => $g
+                        ->whereHas('signers', fn ($q) => $q->where('status', SuratJalanSigner::STATUS_PENDING)
+                            ->whereNull('user_id')->where('group_departement_id', $deptId))
+                        ->whereDoesntHave('signers', fn ($q) => $q->where('user_id', $user->id)
+                            ->where('status', SuratJalanSigner::STATUS_SIGNED)));
+                }
+            });
+    }
+
     public function signerForStep(int $step): ?SuratJalanSigner
     {
         return $this->signers->firstWhere('step', $step);

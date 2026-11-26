@@ -57,7 +57,7 @@
             </ol>
         </nav>
 
-        <form action="{{ route('adhoc-document.store') }}" method="POST" enctype="multipart/form-data" id="form-upload-adhoc">
+        <form action="{{ route('adhoc-document.store') }}" method="POST" enctype="multipart/form-data" id="form-upload-adhoc" style="padding-bottom: 140px;">
             @csrf
 
             <!-- Card 1: Informasi Dokumen & Upload -->
@@ -229,9 +229,9 @@
                 <span class="badge bg-primary signer-order-badge">#${signerRowCount}</span>
             </div>
             
-            <div class="flex-grow-1" style="min-width: 250px;">
+            <div class="flex-grow-1 position-relative" style="min-width: 250px; max-width: 100%;">
                 <label class="form-label small mb-1">User Akun Internal <span class="text-danger">*</span></label>
-                <select name="signers[${signerRowCount}][user_id]" class="form-select signer-select" required onchange="handleSignerUserChange(this, ${signerRowCount})">
+                <select name="signers[${signerRowCount}][user_id]" class="form-select signer-select searchable-select" data-placeholder="-- Cari / Pilih User Internal --" required onchange="handleSignerUserChange(this, ${signerRowCount})">
                     ${userOptions}
                 </select>
             </div>
@@ -249,6 +249,19 @@
         `;
 
         container.appendChild(row);
+        const selectEl = row.querySelector('.signer-select');
+        const roleInput = row.querySelector(`#role-input-${signerRowCount}`);
+        if (roleInput) {
+            roleInput.addEventListener('input', function() {
+                this.dataset.manualEdit = this.value.trim() !== '' ? '1' : '';
+            });
+        }
+        if (window.DMSDropdownHelper && selectEl) {
+            window.DMSDropdownHelper.init(selectEl, {
+                placeholder: '-- Cari / Pilih User Internal --',
+                allowClear: true
+            });
+        }
         updateSignerOrderBadges();
     }
 
@@ -260,6 +273,15 @@
         }
         const row = document.getElementById(`signer-row-${id}`);
         if (row) {
+            if (window.jQuery) {
+                window.jQuery(row).find('select.signer-select').each(function() {
+                    const $sel = window.jQuery(this);
+                    if ($sel.hasClass('select2-hidden-accessible')) {
+                        $sel.select2('close');
+                        $sel.select2('destroy');
+                    }
+                });
+            }
             row.remove();
             updateSignerOrderBadges();
         }
@@ -277,7 +299,16 @@
         const userId = select.value;
         const user = internalUsers.find(u => u.id == userId);
         const roleInput = document.getElementById(`role-input-${rowId}`);
-        if (user && roleInput && !roleInput.value) {
+        if (!roleInput) return;
+
+        if (!userId) {
+            if (!roleInput.dataset.manualEdit) {
+                roleInput.value = '';
+            }
+            return;
+        }
+
+        if (user && (!roleInput.value || !roleInput.dataset.manualEdit)) {
             if (user.employee && user.employee.positions) {
                 roleInput.value = user.employee.positions.name;
             } else {
@@ -290,6 +321,9 @@
     document.addEventListener('DOMContentLoaded', function() {
         addSignerRow();
         addSignerRow();
+        if (window.DMSDropdownHelper) {
+            window.DMSDropdownHelper.initAll(document.getElementById('signers-container'));
+        }
     });
 </script>
 @endsection

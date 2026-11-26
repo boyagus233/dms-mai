@@ -111,7 +111,7 @@
               <label class="form-label fw-semibold" for="vendor_id">Laboratorium / Vendor Kalibrasi <span class="text-danger">*</span></label>
               <div class="input-group">
                 <span class="input-group-text"><i class="ri-store-2-line"></i></span>
-                <select name="vendor_id" id="vendor_id" class="form-select @error('vendor_id') is-invalid @enderror" required>
+                <select name="vendor_id" id="vendor_id" class="form-select searchable-select @error('vendor_id') is-invalid @enderror" data-placeholder="-- Cari / Pilih Vendor Kalibrasi --" required>
                   <option value="">-- Pilih Vendor Kalibrasi Terdaftar --</option>
                   @foreach($vendors as $v)
                     <option value="{{ $v->id }}" @selected(old('vendor_id') == $v->id)>

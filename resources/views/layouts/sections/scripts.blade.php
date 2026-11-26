@@ -15,6 +15,8 @@
   'resources/assets/vendor/libs/perfect-scrollbar/perfect-scrollbar.js',
   'resources/assets/vendor/js/menu.js'
 ])
+<script type="module" src="/vendor/select2/dist/js/select2.full.min.js?v=20240303114000"></script>
+<script type="module" src="/js/dropdown-below.js?v=20261126"></script>
 
 @yield('vendor-script')
 <!-- END: Page Vendor JS-->

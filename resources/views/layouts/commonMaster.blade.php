@@ -25,6 +25,7 @@
     @include('layouts/sections/styles')
 
     @yield(section: 'styles')
+    <link rel="stylesheet" href="/css/select2-materio.css?v=20261126">
     <!-- Include Scripts for customizer, helper, analytics, config -->
     @include('layouts/sections/scriptsIncludes')
     <style>
@@ -36,19 +37,21 @@
 
         .suggestions {
             position: absolute;
-            top: 40px;
+            top: calc(100% + 6px);
             left: 0;
             right: 0;
+            min-width: 280px;
             background: white;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            max-height: 200px;
+            border: 1px solid #e0dff0;
+            border-radius: 0.5rem;
+            box-shadow: 0 8px 24px rgba(46, 38, 61, 0.14);
+            max-height: 260px;
             overflow-y: auto;
             list-style: none;
             padding: 0;
             margin: 0;
             display: none;
-            z-index: 1000;
+            z-index: 1080;
         }
 
         .suggestions li {
@@ -78,36 +81,47 @@
 
     <!-- for java script action -->
     @yield(section: 'scripts')
+    <script type="module">
+        window.DMSDropdownHelper?.patchSelect2();
+    </script>
     <script>
         const input = document.getElementById("searchInput");
         const suggestionBox = document.getElementById("suggestionsBox");
-        input.addEventListener("input", async function() {
-            const query = this.value.trim();
+        if (input && suggestionBox) {
+            input.addEventListener("input", async function() {
+                const query = this.value.trim();
 
-            if (!query || query.length < 3) {
-                suggestionBox.style.display = "none";
-                return;
-            }
+                if (!query || query.length < 3) {
+                    suggestionBox.style.display = "none";
+                    return;
+                }
 
-            const res = await fetch(`/search?q=${query}`);
-            const data = await res.json();
+                const res = await fetch(`/search?q=${encodeURIComponent(query)}`);
+                const data = await res.json();
 
-            suggestionBox.innerHTML = data
-                .map(item => `
-            <li class="list-group-item list-group-item-action dropdown-notifications-item">
-                <a href="${item.url}" class="menu-link d-flex align-items-center text-decoration-none">
-                    <i class="menu-icon tf-icons ri-file-copy-line"></i>
-                    <div class="flex-grow-1">
-                        <h6 class="small mb-50">${item.document_no}</h6>
-                        <small class="mb-1 d-block text-body">${item.document_name}</small>
-                    </div>
-                </a>
-            </li>
-        `)
-                .join("");
+                suggestionBox.innerHTML = data
+                    .map(item => `
+                <li class="list-group-item list-group-item-action dropdown-notifications-item">
+                    <a href="${item.url}" class="menu-link d-flex align-items-center text-decoration-none">
+                        <i class="menu-icon tf-icons ri-file-copy-line"></i>
+                        <div class="flex-grow-1">
+                            <h6 class="small mb-50">${item.document_no}</h6>
+                            <small class="mb-1 d-block text-body">${item.document_name}</small>
+                        </div>
+                    </a>
+                </li>
+            `)
+                    .join("");
 
-            suggestionBox.style.display = data.length ? "block" : "none";
-        });
+                suggestionBox.style.display = data.length ? "block" : "none";
+            });
+
+            document.addEventListener("click", function(e) {
+                if (!input.contains(e.target) && !suggestionBox.contains(e.target)) {
+                    suggestionBox.style.display = "none";
+                }
+            });
+        }
     </script>
 </body>
 

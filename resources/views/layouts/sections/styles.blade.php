@@ -15,6 +15,7 @@
 ])
 
 <!-- Vendor Styles -->
+<link href="/vendor/select2/dist/css/select2.min.css?v=20240303114000" rel="stylesheet">
 @vite(['resources/assets/vendor/libs/perfect-scrollbar/perfect-scrollbar.scss'])
 @yield('vendor-style')
 

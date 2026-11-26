@@ -40,7 +40,7 @@ $navbarDetached = ($navbarDetached ?? '');
       <div class="navbar-nav-right d-flex align-items-center" id="navbar-collapse">
         <!-- Search -->
         <div class="navbar-nav align-items-center">
-          <div class="nav-item d-flex align-items-center">
+          <div class="nav-item d-flex align-items-center position-relative">
             <i class="ri-search-line ri-22px me-1_5"></i>
             <input type="text" id="searchInput" class="form-control border-0 shadow-none ps-1 ps-sm-2 ms-50" placeholder="Search..." aria-label="Search..." autocomplete="off">
             <ul id="suggestionsBox" class="suggestions"></ul>

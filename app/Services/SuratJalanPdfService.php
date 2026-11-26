@@ -8,7 +8,8 @@ use TCPDF;
 
 /**
  * Generator PDF:
- *  1. Surat Jalan resmi (layout formal + 4 kotak TTD berisi image stamp / QR stamp)
+ *  1. Surat Jalan resmi: 1 kertas A4 berisi 2 format — atas Surat Jalan (4 kotak TTD berisi
+ *     image stamp / QR stamp), bawah template yang sama untuk pengecekan security (tanpa inputan)
  *  2. Audit History (on-demand, dari tabel document_audit_logs)
  */
 class SuratJalanPdfService
@@ -20,9 +21,15 @@ class SuratJalanPdfService
     private const M_RIGHT = 12;
     private const CONTENT_W = 186;           // 210 - 12 - 12
     private const FOOTER_H = 14;             // area footer (catatan + nomor halaman)
-    private const DATE_H = 7;                // baris "Karawang, tanggal" di atas kotak TTD
-    private const LEMBAR_H = 12;             // keterangan Lembar 1/2/3 di bawah kotak TTD
-    private const SIG_H = 7 + 51 + 12;       // DATE_H + kotak tanda tangan + LEMBAR_H
+
+    // --- Surat Jalan: 1 kertas A4 berisi 2 format (feedback MAI #3) ---
+    // Format 1 (atas)  : template Surat Jalan (dibawa vendor setelah TTD basah).
+    // Format 2 (bawah) : template yang sama untuk pengecekan security, tanpa inputan.
+    private const HALF_H = 148.5;            // batas potong = setengah A4
+    private const HALF_PAD_TOP = 5;          // jarak atas tiap format
+    private const SIG_BLOCK_H = 44;          // tanggal + 4 kotak TTD + keterangan lembar (format 1)
+    private const TABLE_HEAD_H = 6;
+    private const ROW_MIN_H = 5.2;
     private const COLS = [12, 86, 28, 60];   // NO, JENIS BARANG, QTY, KETERANGAN
 
     public function __construct(private SuratJalanService $service)
@@ -30,7 +37,7 @@ class SuratJalanPdfService
     }
 
     /* =====================================================================
-     |  1. PDF SURAT JALAN
+     |  1. PDF SURAT JALAN — 1 kertas, 2 format (atas: Surat Jalan, bawah: Security)
      * =================================================================== */
 
     public function suratJalan(SuratJalan $sj): string
@@ -38,17 +45,29 @@ class SuratJalanPdfService
         $sj->loadMissing(['items', 'signers', 'departement', 'creator']);
 
         $pdf = $this->newPdf('Surat Jalan ' . ($sj->sj_no ?? 'DRAFT'), sprintf(
-            'Dokumen elektronik %s — pengganti form Surat Jalan 3 rangkap.  Doc ID: %s',
-            config('app.name'), $sj->uuid
+            'Dokumen elektronik %s.  Doc ID: %s', config('app.name'), $sj->uuid
         ));
+        $pdf->SetAutoPageBreak(false);
+
+        // Tinggi area isi tabel per format (sama untuk format 1 & 2 agar kedua format identik).
         $pdf->AddPage();
+        $tableTop = $this->measureTableTop($pdf, $sj);
+        $tableBottom = self::HALF_H - 3 - self::SIG_BLOCK_H;
+        $chunks = $this->chunkItems($pdf, $sj, $tableBottom - ($tableTop + self::TABLE_HEAD_H));
 
-        $y = $this->drawLetterhead($pdf);
-        $y = $this->drawHeaderBlock($pdf, $sj, $y + 3);
-        $sigTop = self::PAGE_H - self::FOOTER_H - self::SIG_H - 2;
+        foreach ($chunks as $i => $items) {
+            if ($i > 0) {
+                $pdf->AddPage();
+            }
+            $page = [$i + 1, count($chunks)];
 
-        $this->drawItemsTable($pdf, $sj, $y + 4, $sigTop);
-        $this->drawSignatureBlock($pdf, $sj, $sigTop);
+            // Format 1 — Surat Jalan
+            $this->drawFormat($pdf, $sj, $items, 0, true, 'LEMBAR VENDOR', $page);
+            // Garis potong
+            $this->drawCutLine($pdf, self::HALF_H);
+            // Format 2 — pengecekan security (template sama, tanpa inputan)
+            $this->drawFormat($pdf, $sj, $items, self::HALF_H, false, 'LEMBAR SECURITY', $page);
+        }
 
         if ($sj->status !== SuratJalan::STATUS_COMPLETED) {
             $this->watermark($pdf, $sj->status === SuratJalan::STATUS_IN_PROGRESS ? 'IN PROGRESS' : $sj->status,
@@ -58,6 +77,279 @@ class SuratJalanPdfService
         return $pdf->Output('', 'S');
     }
 
+    /**
+     * Gambar satu format (setengah halaman) mulai dari $y0.
+     *
+     * @param array{0:int,1:int} $page [halaman ke, total halaman]
+     */
+    private function drawFormat(TCPDF $pdf, SuratJalan $sj, $items, float $y0, bool $withSignatures, string $copyLabel, array $page): void
+    {
+        $y = $this->drawCompactLetterhead($pdf, $y0 + self::HALF_PAD_TOP, $copyLabel);
+        $y = $this->drawCompactHeader($pdf, $sj, $y + 1.5, $page);
+        $tableBottom = $y0 + self::HALF_H - 3 - self::SIG_BLOCK_H;
+        $this->drawCompactTable($pdf, $items, $y + 2, $tableBottom);
+
+        if ($withSignatures) {
+            $this->drawCompactSignatures($pdf, $sj, $tableBottom + 1.5);
+        }
+    }
+
+    /** Posisi Y awal tabel (dipakai untuk menghitung kapasitas baris per format). */
+    private function measureTableTop(TCPDF $pdf, SuratJalan $sj): float
+    {
+        $pdf->startTransaction();
+        $y = $this->drawCompactLetterhead($pdf, self::HALF_PAD_TOP, '');
+        $y = $this->drawCompactHeader($pdf, $sj, $y + 1.5, [1, 1]);
+        $pdf->rollbackTransaction(true);   // true = pulihkan objek ini (hasil ukur tidak ikut tercetak)
+
+        return $y + 2;
+    }
+
+    /** Bagi item ke beberapa halaman sesuai tinggi area tabel yang tersedia. */
+    private function chunkItems(TCPDF $pdf, SuratJalan $sj, float $available): array
+    {
+        $pdf->SetFont('helvetica', '', 8);
+        $chunks = [[]];
+        $used = 0;
+        foreach ($sj->items as $item) {
+            $h = $this->rowHeight($pdf, $item);
+            if ($used + $h > $available && !empty($chunks[count($chunks) - 1])) {
+                $chunks[] = [];
+                $used = 0;
+            }
+            $chunks[count($chunks) - 1][] = $item;
+            $used += $h;
+        }
+        return $chunks;
+    }
+
+    private function rowCells($item): array
+    {
+        return [(string) $item->line_no, $item->jenis_barang, $item->qtyFormatted(), (string) $item->keterangan];
+    }
+
+    private function rowHeight(TCPDF $pdf, $item): float
+    {
+        $lines = 1;
+        foreach ($this->rowCells($item) as $i => $text) {
+            $lines = max($lines, $pdf->getNumLines($text, self::COLS[$i] - 2));
+        }
+        return max(self::ROW_MIN_H, $lines * 3.4 + 1.8);
+    }
+
+    /** Kop surat versi ringkas (setengah halaman) + label lembar di pojok kanan atas. */
+    private function drawCompactLetterhead(TCPDF $pdf, float $top, string $copyLabel): float
+    {
+        $company = config('surat_jalan.company');
+        $logo = public_path($company['logo']);
+        $textX = self::M_LEFT;
+        $labelW = 38;
+
+        $pdf->SetTextColor(20, 20, 20);
+        if ($copyLabel !== '') {
+            $pdf->SetFont('helvetica', 'B', 7.5);
+            $pdf->SetFillColor(235, 235, 235);
+            $pdf->SetXY(self::PAGE_W - self::M_RIGHT - $labelW, $top - 1);
+            $pdf->Cell($labelW, 4.5, $copyLabel, 1, 0, 'C', true);
+        }
+        if (!empty($company['tagline'])) {
+            $pdf->SetFont('helvetica', 'I', 6);
+            $pdf->SetXY(self::M_LEFT + $labelW, $top);
+            $pdf->Cell(self::CONTENT_W - 2 * $labelW, 3, $company['tagline'], 0, 1, 'C');
+            $top += 3.2;
+        }
+
+        if (is_file($logo)) {
+            $pdf->Image($logo, self::M_LEFT, $top + 0.5, 24, 11, '', '', '', true, 300, '', false, false, 0, 'LM');
+            $textX = self::M_LEFT + 26;
+        }
+
+        $pdf->SetFont('helvetica', 'B', 11);
+        $pdf->SetXY($textX, $top);
+        $pdf->Cell(0, 4.8, $company['name'], 0, 1);
+        $pdf->SetFont('helvetica', '', 6.5);
+        $pdf->SetX($textX);
+        $pdf->MultiCell(self::CONTENT_W - ($textX - self::M_LEFT), 2.8,
+            trim($company['address'] . ($company['phone'] ? "\nTelp : " . $company['phone'] : '')), 0, 'L');
+
+        $lineY = max($top + 12, $pdf->GetY() + 1);
+        $pdf->SetLineWidth(0.5);
+        $pdf->Line(self::M_LEFT, $lineY, self::PAGE_W - self::M_RIGHT, $lineY);
+        $pdf->SetLineWidth(0.2);
+        $pdf->Line(self::M_LEFT, $lineY + 0.7, self::PAGE_W - self::M_RIGHT, $lineY + 0.7);
+
+        return $lineY + 0.7;
+    }
+
+    /** Judul, NO, Kepada, No. Kend & checklist kategori (versi ringkas). */
+    private function drawCompactHeader(TCPDF $pdf, SuratJalan $sj, float $y, array $page): float
+    {
+        $leftW = 120;
+        $boxX = self::M_LEFT + $leftW + 4;
+        $boxW = self::CONTENT_W - $leftW - 4;
+
+        // Judul + nomor
+        $pdf->SetFont('helvetica', 'B', 14);
+        $pdf->SetXY(self::M_LEFT, $y + 0.5);
+        $pdf->Cell($leftW, 6.5, 'SURAT JALAN', 0, 1, 'C');
+        $titleW = $pdf->GetStringWidth('SURAT JALAN');
+        $pdf->SetLineWidth(0.35);
+        $pdf->Line(self::M_LEFT + ($leftW - $titleW) / 2, $y + 6.8, self::M_LEFT + ($leftW + $titleW) / 2, $y + 6.8);
+        $pdf->SetLineWidth(0.2);
+
+        $pdf->SetFont('helvetica', 'B', 9);
+        $pdf->SetXY(self::M_LEFT, $y + 7.5);
+        $no = 'NO : ' . ($sj->sj_no ?? '( DRAFT )');
+        if ($page[1] > 1) {
+            $no .= "   (Hal. {$page[0]}/{$page[1]})";
+        }
+        $pdf->Cell($leftW, 4.5, $no, 0, 1, 'C');
+
+        // Kepada & No. Kend
+        $kepadaTipe = config('surat_jalan.kepada_tipe.' . $sj->kepada_tipe);
+        $ly = $y + 13.5;
+        foreach ([['Kepada', $sj->kepada . ($kepadaTipe ? " ({$kepadaTipe})" : '')], ['No. Kend', $sj->no_kendaraan ?: '-']] as [$label, $value]) {
+            $pdf->SetXY(self::M_LEFT, $ly);
+            $pdf->SetFont('helvetica', '', 8.5);
+            $pdf->Cell(17, 4.5, $label, 0, 0, 'L');
+            $pdf->Cell(3, 4.5, ':', 0, 0, 'L');
+            $pdf->SetFont('helvetica', 'B', 8.5);
+            $pdf->MultiCell($leftW - 20, 4.5, $value, 'B', 'L', false, 1, '', '', true, 0, false, true, 4.5, 'M', true);
+            $ly += 5.5;
+        }
+
+        // Checklist kategori
+        $selected = (array) $sj->kategori;
+        $pdf->SetFont('helvetica', 'B', 7.5);
+        $pdf->SetFillColor(240, 240, 240);
+        $pdf->SetXY($boxX, $y);
+        $pdf->Cell($boxW, 4.5, 'Keperluan / Tujuan Barang', 1, 1, 'C', true);
+        $cy = $y + 4.5;
+        foreach (config('surat_jalan.kategori') as $code => $label) {
+            $checked = in_array($code, $selected, true);
+            $text = $label . ($code === 'LAIN_LAIN' && $checked && $sj->kategori_lain ? ': ' . $sj->kategori_lain : '');
+            $pdf->Rect($boxX + 1.5, $cy + 0.8, 2.6, 2.6);
+            if ($checked) {
+                $pdf->SetLineWidth(0.45);
+                $pdf->Line($boxX + 1.9, $cy + 2.1, $boxX + 2.6, $cy + 3.1);
+                $pdf->Line($boxX + 2.6, $cy + 3.1, $boxX + 3.9, $cy + 1.1);
+                $pdf->SetLineWidth(0.2);
+            }
+            $pdf->SetFont('helvetica', $checked ? 'B' : '', 7.2);
+            $pdf->MultiCell($boxW - 6, 3.4, $text, 0, 'L', false, 1, $boxX + 5.5, $cy + 0.3, true, 0, false, true, 3.4, 'M', true);
+            $cy += 3.5;
+        }
+        $pdf->Rect($boxX, $y + 4.5, $boxW, $cy - $y - 4.5 + 0.8);
+
+        return max($ly, $cy + 0.8);
+    }
+
+    /** Tabel NO / JENIS BARANG / QTY / KETERANGAN + baris kosong sampai $bottom (meniru form bergaris). */
+    private function drawCompactTable(TCPDF $pdf, $items, float $y, float $bottom): void
+    {
+        $pdf->SetFont('helvetica', 'B', 8);
+        $pdf->SetFillColor(235, 235, 235);
+        $x = self::M_LEFT;
+        foreach (['NO', 'JENIS BARANG', 'QTY', 'KETERANGAN'] as $i => $label) {
+            $pdf->MultiCell(self::COLS[$i], self::TABLE_HEAD_H, $label, 1, 'C', true, 0, $x, $y, true, 0, false, true, self::TABLE_HEAD_H, 'M');
+            $x += self::COLS[$i];
+        }
+        $y += self::TABLE_HEAD_H;
+
+        $pdf->SetFont('helvetica', '', 8);
+        foreach ($items as $item) {
+            $h = $this->rowHeight($pdf, $item);
+            $x = self::M_LEFT;
+            foreach ($this->rowCells($item) as $i => $text) {
+                $align = $i === 0 ? 'C' : ($i === 2 ? 'R' : 'L');
+                $pdf->MultiCell(self::COLS[$i], $h, $text, 1, $align, false, 0, $x, $y, true, 0, false, true, $h, 'M');
+                $x += self::COLS[$i];
+            }
+            $y += $h;
+        }
+
+        while ($y + self::ROW_MIN_H <= $bottom + 0.01) {
+            $x = self::M_LEFT;
+            foreach (self::COLS as $w) {
+                $pdf->Rect($x, $y, $w, self::ROW_MIN_H);
+                $x += $w;
+            }
+            $y += self::ROW_MIN_H;
+        }
+    }
+
+    /** "Karawang, tgl" + 4 kotak tanda tangan + keterangan lembar (format 1). */
+    private function drawCompactSignatures(TCPDF $pdf, SuratJalan $sj, float $y): void
+    {
+        $w = self::CONTENT_W / 4;
+        $labelH = 4.5;
+        $stampH = 16;
+        $nameH = 3.8;
+        $infoH = 3.2;
+
+        $pdf->SetFont('helvetica', '', 8.5);
+        $pdf->SetTextColor(20, 20, 20);
+        $pdf->SetXY(self::M_LEFT, $y);
+        $pdf->Cell(self::CONTENT_W, 4, $sj->location . ', ' . ($sj->sj_date ?? now())->format('d-m-Y'), 0, 0, 'R');
+        $y += 4.5;
+
+        $slots = config('surat_jalan.slots');
+        foreach (array_values(config('surat_jalan.slot_layout', array_keys($slots))) as $col => $step) {
+            $slot = $slots[$step];
+            $x = self::M_LEFT + $col * $w;
+            $signer = $sj->signerForStep($step);
+
+            $pdf->SetFont('helvetica', 'B', 8);
+            $pdf->SetFillColor(235, 235, 235);
+            $pdf->SetTextColor(20, 20, 20);
+            $pdf->MultiCell($w, $labelH, $slot['label'], 1, 'C', true, 0, $x, $y, true, 0, false, true, $labelH, 'M');
+
+            $sy = $y + $labelH;
+            $pdf->Rect($x, $sy, $w, $stampH);
+            $this->drawStamp($pdf, $sj, $signer, $x, $sy, $w, $stampH);
+
+            $ny = $sy + $stampH;
+            $pdf->SetFont('helvetica', 'B', 7);
+            $name = $signer ? '( ' . $signer->signer_name . ' )' : '(                    )';
+            $pdf->MultiCell($w, $nameH, $name, 'LR', 'C', false, 0, $x, $ny, true, 0, false, true, $nameH, 'M', true);
+
+            $pdf->SetFont('helvetica', '', 6.3);
+            $pdf->MultiCell($w, $infoH, $signer?->signer_position ?: $slot['role'], 'LR', 'C', false, 0, $x, $ny + $nameH, true, 0, false, true, $infoH, 'M', true);
+
+            $date = $signer && $signer->isSigned() ? $signer->signed_at->format('d-m-Y H:i:s') : 'Tgl: ...................';
+            $pdf->MultiCell($w, $infoH, $date, 'LRB', 'C', false, 0, $x, $ny + $nameH + $infoH, true, 0, false, true, $infoH, 'M', true);
+        }
+        $pdf->SetTextColor(20, 20, 20);
+
+        // Keterangan distribusi lembar (sesuai template form fisik)
+        $ly = $y + $labelH + $stampH + $nameH + 2 * $infoH + 0.8;
+        $pdf->SetFont('helvetica', '', 6.3);
+        foreach (config('surat_jalan.lembar', []) as $lembar => $penerima) {
+            $pdf->SetXY(self::M_LEFT, $ly);
+            $pdf->Cell(13, 2.6, $lembar, 0, 0, 'L');
+            $pdf->Cell(60, 2.6, ': ' . $penerima, 0, 0, 'L');
+            $ly += 2.6;
+        }
+    }
+
+    /** Garis potong putus-putus di antara format 1 dan format 2. */
+    private function drawCutLine(TCPDF $pdf, float $y): void
+    {
+        $pdf->SetLineStyle(['width' => 0.3, 'dash' => '2,1.5', 'color' => [120, 120, 120]]);
+        $pdf->Line(4, $y, self::PAGE_W - 4, $y);
+        $pdf->SetLineStyle(['width' => 0.2, 'dash' => 0, 'color' => [30, 30, 30]]);
+
+        $pdf->SetFont('helvetica', 'I', 6);
+        $pdf->SetTextColor(110, 110, 110);
+        $pdf->SetFillColor(255, 255, 255);
+        $label = '  potong / sobek di sini  ';
+        $w = $pdf->GetStringWidth($label) + 2;
+        $pdf->SetXY((self::PAGE_W - $w) / 2, $y - 1.6);
+        $pdf->Cell($w, 3.2, $label, 0, 0, 'C', true);
+        $pdf->SetTextColor(20, 20, 20);
+    }
+
+    /** Kop surat ukuran penuh (dipakai PDF Audit History). */
     private function drawLetterhead(TCPDF $pdf): float
     {
         $company = config('surat_jalan.company');
@@ -67,7 +359,6 @@ class SuratJalanPdfService
 
         $pdf->SetTextColor(20, 20, 20);
         if (!empty($company['tagline'])) {
-            // Tagline kecil di atas kop, seperti form fisik
             $pdf->SetFont('helvetica', 'I', 7);
             $pdf->SetXY(self::M_LEFT, $top);
             $pdf->Cell(self::CONTENT_W, 3.5, $company['tagline'], 0, 1, 'C');
@@ -93,197 +384,6 @@ class SuratJalanPdfService
         $pdf->Line(self::M_LEFT, $lineY + 0.9, self::PAGE_W - self::M_RIGHT, $lineY + 0.9);
 
         return $lineY + 1;
-    }
-
-    private function drawHeaderBlock(TCPDF $pdf, SuratJalan $sj, float $y): float
-    {
-        $leftW = 118;
-        $boxX = self::M_LEFT + $leftW + 6;
-        $boxW = self::CONTENT_W - $leftW - 6;
-
-        // --- Judul
-        $pdf->SetFont('helvetica', 'B', 18);
-        $pdf->SetXY(self::M_LEFT, $y + 2);
-        $pdf->Cell($leftW, 9, 'SURAT JALAN', 0, 1, 'C');
-        $titleW = $pdf->GetStringWidth('SURAT JALAN');
-        $pdf->SetLineWidth(0.4);
-        $pdf->Line(self::M_LEFT + ($leftW - $titleW) / 2, $y + 10.5, self::M_LEFT + ($leftW + $titleW) / 2, $y + 10.5);
-        $pdf->SetLineWidth(0.2);
-
-        $pdf->SetFont('helvetica', 'B', 10.5);
-        $pdf->SetXY(self::M_LEFT, $y + 12);
-        $pdf->Cell($leftW, 6, 'NO : ' . ($sj->sj_no ?? '( DRAFT )'), 0, 1, 'C');
-
-        // --- Data kiri
-        $kepadaTipe = config('surat_jalan.kepada_tipe.' . $sj->kepada_tipe);
-        // Tanggal & lokasi dicetak di atas kotak tanda tangan (lihat drawSignatureBlock), seperti form fisik.
-        $rows = [
-            ['Kepada', $sj->kepada . ($kepadaTipe ? " ({$kepadaTipe})" : '')],
-            ['No. Kend', $sj->no_kendaraan ?: '-'],
-        ];
-        $ly = $y + 22;
-        foreach ($rows as [$label, $value]) {
-            $pdf->SetXY(self::M_LEFT, $ly);
-            $pdf->SetFont('helvetica', '', 9.5);
-            $pdf->Cell(20, 5.5, $label, 0, 0, 'L');
-            $pdf->Cell(4, 5.5, ':', 0, 0, 'L');
-            $pdf->SetFont('helvetica', 'B', 9.5);
-            $pdf->MultiCell($leftW - 24, 5.5, $value, 'B', 'L', false, 1);
-            $ly = $pdf->GetY() + 0.8;
-        }
-
-        // --- Checklist kategori (kanan)
-        $selected = (array) $sj->kategori;
-        $boxY = $y + 2;
-        $pdf->SetFont('helvetica', 'B', 8.5);
-        $pdf->SetFillColor(240, 240, 240);
-        $pdf->SetXY($boxX, $boxY);
-        $pdf->Cell($boxW, 6, 'Keperluan / Tujuan Barang', 1, 1, 'C', true);
-        $cy = $boxY + 6;
-        $pdf->SetFont('helvetica', '', 8.5);
-        foreach (config('surat_jalan.kategori') as $code => $label) {
-            $checked = in_array($code, $selected, true);
-            $text = $label;
-            if ($code === 'LAIN_LAIN' && $checked && $sj->kategori_lain) {
-                $text .= ': ' . $sj->kategori_lain;
-            }
-            $lines = $pdf->getNumLines($text, $boxW - 9);
-            $h = max(5.4, $lines * 3.9 + 1.5);
-            $pdf->Rect($boxX + 2, $cy + 1.3, 3.2, 3.2);
-            if ($checked) {
-                // centang
-                $pdf->SetLineWidth(0.5);
-                $pdf->Line($boxX + 2.5, $cy + 2.9, $boxX + 3.4, $cy + 4.1);
-                $pdf->Line($boxX + 3.4, $cy + 4.1, $boxX + 5.0, $cy + 1.6);
-                $pdf->SetLineWidth(0.2);
-                $pdf->SetFont('helvetica', 'B', 8.5);
-            } else {
-                $pdf->SetFont('helvetica', '', 8.5);
-            }
-            $pdf->SetXY($boxX + 7, $cy + 0.6);
-            $pdf->MultiCell($boxW - 9, 3.9, $text, 0, 'L', false, 1);
-            $cy += $h;
-        }
-        $pdf->Rect($boxX, $boxY + 6, $boxW, $cy - $boxY - 6 + 1);
-
-        return max($ly, $cy + 1);
-    }
-
-    private function drawItemsTable(TCPDF $pdf, SuratJalan $sj, float $y, float $sigTop): void
-    {
-        $pageBottom = self::PAGE_H - self::FOOTER_H - 2;
-        $y = $this->drawTableHeader($pdf, $y);
-
-        $pdf->SetFont('helvetica', '', 9);
-        foreach ($sj->items as $item) {
-            $cells = [(string) $item->line_no, $item->jenis_barang, $item->qtyFormatted(), (string) $item->keterangan];
-            $lines = 1;
-            foreach ($cells as $i => $text) {
-                $lines = max($lines, $pdf->getNumLines($text, self::COLS[$i] - 2));
-            }
-            $h = max(7, $lines * 4.3 + 2.4);
-
-            if ($y + $h > $pageBottom) {
-                $pdf->AddPage();
-                $y = $this->drawTableHeader($pdf, 14);
-                $pdf->SetFont('helvetica', '', 9);
-            }
-
-            $x = self::M_LEFT;
-            foreach ($cells as $i => $text) {
-                $align = $i === 0 ? 'C' : ($i === 2 ? 'R' : 'L');
-                $pdf->MultiCell(self::COLS[$i], $h, $text, 1, $align, false, 0, $x, $y, true, 0, false, true, $h, 'M');
-                $x += self::COLS[$i];
-            }
-            $y += $h;
-        }
-
-        // Blok tanda tangan harus muat di halaman terakhir
-        if ($y > $sigTop - 3) {
-            $pdf->AddPage();
-            $y = $this->drawTableHeader($pdf, 14);
-        }
-
-        // Baris kosong pengisi (meniru form fisik bergaris)
-        while ($y + 7 <= $sigTop - 3) {
-            $x = self::M_LEFT;
-            foreach (self::COLS as $w) {
-                $pdf->Rect($x, $y, $w, 7);
-                $x += $w;
-            }
-            $y += 7;
-        }
-    }
-
-    private function drawTableHeader(TCPDF $pdf, float $y): float
-    {
-        $pdf->SetFont('helvetica', 'B', 9);
-        $pdf->SetFillColor(235, 235, 235);
-        $x = self::M_LEFT;
-        foreach (['NO', 'JENIS BARANG', 'QTY', 'KETERANGAN'] as $i => $label) {
-            $pdf->MultiCell(self::COLS[$i], 8, $label, 1, 'C', true, 0, $x, $y, true, 0, false, true, 8, 'M');
-            $x += self::COLS[$i];
-        }
-        return $y + 8;
-    }
-
-    private function drawSignatureBlock(TCPDF $pdf, SuratJalan $sj, float $y): void
-    {
-        $w = self::CONTENT_W / 4;
-        $labelH = 7;
-        $stampH = 28;
-        $nameH = 6;
-        $infoH = 5;
-
-        // "Karawang, dd-mm-yyyy" rata kanan di atas kotak tanda tangan (sesuai form fisik)
-        $pdf->SetFont('helvetica', '', 9.5);
-        $pdf->SetTextColor(20, 20, 20);
-        $pdf->SetXY(self::M_LEFT, $y);
-        $pdf->Cell(self::CONTENT_W, 6, $sj->location . ', ' . ($sj->sj_date ?? now())->format('d-m-Y'), 0, 0, 'R');
-        $y += self::DATE_H;
-
-        $slots = config('surat_jalan.slots');
-        foreach (array_values(config('surat_jalan.slot_layout', array_keys($slots))) as $col => $step) {
-            $slot = $slots[$step];
-            $x = self::M_LEFT + $col * $w;
-            $signer = $sj->signerForStep($step);
-
-            // Judul kotak
-            $pdf->SetFont('helvetica', 'B', 9);
-            $pdf->SetFillColor(235, 235, 235);
-            $pdf->SetTextColor(20, 20, 20);
-            $pdf->MultiCell($w, $labelH, $slot['label'], 1, 'C', true, 0, $x, $y, true, 0, false, true, $labelH, 'M');
-
-            // Area stamp
-            $sy = $y + $labelH;
-            $pdf->Rect($x, $sy, $w, $stampH);
-            $this->drawStamp($pdf, $sj, $signer, $x, $sy, $w, $stampH);
-
-            // Nama
-            $ny = $sy + $stampH;
-            $pdf->SetFont('helvetica', 'B', 8);
-            $name = $signer ? '( ' . $signer->signer_name . ' )' : '(                    )';
-            $pdf->MultiCell($w, $nameH, $name, 'LR', 'C', false, 0, $x, $ny, true, 0, false, true, $nameH, 'M', true);
-
-            // Jabatan
-            $pdf->SetFont('helvetica', '', 7);
-            $pdf->MultiCell($w, $infoH, $signer?->signer_position ?: $slot['role'], 'LR', 'C', false, 0, $x, $ny + $nameH, true, 0, false, true, $infoH, 'M', true);
-
-            // Tanggal sign
-            $date = $signer && $signer->isSigned() ? $signer->signed_at->format('d-m-Y H:i:s') : 'Tgl: ...................';
-            $pdf->MultiCell($w, $infoH, $date, 'LRB', 'C', false, 0, $x, $ny + $nameH + $infoH, true, 0, false, true, $infoH, 'M', true);
-        }
-        $pdf->SetTextColor(20, 20, 20);
-
-        // Keterangan distribusi lembar (versi digital menggantikan 3 rangkap kertas)
-        $ly = $y + $labelH + $stampH + $nameH + 2 * $infoH + 1.5;
-        $pdf->SetFont('helvetica', '', 7.5);
-        foreach (config('surat_jalan.lembar', []) as $lembar => $penerima) {
-            $pdf->SetXY(self::M_LEFT, $ly);
-            $pdf->Cell(16, 3.4, $lembar, 0, 0, 'L');
-            $pdf->Cell(60, 3.4, ': ' . $penerima, 0, 0, 'L');
-            $ly += 3.4;
-        }
     }
 
     private function drawStamp(TCPDF $pdf, SuratJalan $sj, ?SuratJalanSigner $signer, float $x, float $y, float $w, float $h): void
@@ -517,15 +617,18 @@ class SuratJalanPdfService
         $pdf->SetAutoPageBreak(false);
         for ($p = 1; $p <= $pages; $p++) {
             $pdf->setPage($p);
-            $pdf->SetAlpha(0.12);
-            $pdf->SetFont('helvetica', 'B', 64);
-            $pdf->SetTextColor(...$rgb);
-            $pdf->StartTransform();
-            $pdf->Rotate(35, self::PAGE_W / 2, self::PAGE_H / 2);
-            $pdf->SetXY(0, self::PAGE_H / 2 - 15);
-            $pdf->Cell(self::PAGE_W, 30, $text, 0, 0, 'C');
-            $pdf->StopTransform();
-            $pdf->SetAlpha(1);
+            // Satu watermark di tengah tiap format (atas & bawah), karena kertas akan dirobek dua.
+            foreach ([self::HALF_H / 2, self::HALF_H * 1.5] as $cy) {
+                $pdf->SetAlpha(0.12);
+                $pdf->SetFont('helvetica', 'B', 46);
+                $pdf->SetTextColor(...$rgb);
+                $pdf->StartTransform();
+                $pdf->Rotate(20, self::PAGE_W / 2, $cy);
+                $pdf->SetXY(0, $cy - 10);
+                $pdf->Cell(self::PAGE_W, 20, $text, 0, 0, 'C');
+                $pdf->StopTransform();
+                $pdf->SetAlpha(1);
+            }
         }
         $pdf->SetTextColor(20, 20, 20);
         $pdf->SetAutoPageBreak($auto, self::FOOTER_H);

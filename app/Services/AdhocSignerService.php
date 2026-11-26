@@ -150,7 +150,7 @@ class AdhocSignerService
                 DocumentSignatureField::create([
                     'document_id' => $document->id,
                     'document_signer_id' => $assignedSigner->id,
-                    'field_type' => in_array($fData['field_type'], ['SIGNATURE', 'INITIAL_PARAF', 'SIGN_DATE', 'NAME_TITLE']) ? $fData['field_type'] : 'SIGNATURE',
+                    'field_type' => 'SIGNATURE',
                     'page_number' => (int) ($fData['page_number'] ?? 1),
                     'x_percent' => round((float) $fData['x_percent'], 4),
                     'y_percent' => round((float) $fData['y_percent'], 4),

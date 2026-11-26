@@ -111,7 +111,7 @@
         <div class="d-flex justify-content-between align-items-center mb-3">
             <div>
                 <h4 class="fw-bold mb-1"><span class="text-muted fw-light">All Document Approval /</span> Visual Tagging</h4>
-                <p class="text-muted mb-0">Tentukan posisi kotak tanda tangan, paraf, tanggal, atau nama untuk tiap penanda tangan.</p>
+                <p class="text-muted mb-0">Tentukan posisi kotak tanda tangan pada halaman dokumen untuk tiap penanda tangan.</p>
             </div>
             <div class="d-flex gap-2">
                 <a href="{{ route('adhoc-document.create') }}" class="btn btn-outline-secondary">
@@ -153,37 +153,13 @@
                         <h6 class="card-title mb-0 fw-bold"><i class="ri-drag-drop-line me-1 text-primary"></i> 2. Klik untuk Taruh di Halaman</h6>
                     </div>
                     <div class="card-body pt-3">
-                        <p class="text-muted small mb-2">Klik tombol di bawah untuk menempatkan kotak pada halaman PDF yang aktif:</p>
+                        <p class="text-muted small mb-2">Klik tombol di bawah untuk menempatkan kotak tanda tangan pada halaman PDF yang aktif:</p>
                         
-                        <button type="button" class="btn btn-outline-primary tool-palette-btn" onclick="addTagField('SIGNATURE')">
+                        <button type="button" class="btn btn-outline-primary tool-palette-btn mb-0" onclick="addTagField('SIGNATURE')">
                             <i class="ri-quill-pen-line fs-5"></i>
                             <div>
-                                <span class="d-block fw-bold">Tanda Tangan / QR</span>
-                                <small class="text-muted" style="font-size: 10px;">Area tanda tangan utama</small>
-                            </div>
-                        </button>
-
-                        <button type="button" class="btn btn-outline-info tool-palette-btn" onclick="addTagField('INITIAL_PARAF')">
-                            <i class="ri-edit-line fs-5"></i>
-                            <div>
-                                <span class="d-block fw-bold">Initial / Paraf</span>
-                                <small class="text-muted" style="font-size: 10px;">Paraf lembar / tepi halaman</small>
-                            </div>
-                        </button>
-
-                        <button type="button" class="btn btn-outline-success tool-palette-btn" onclick="addTagField('SIGN_DATE')">
-                            <i class="ri-calendar-line fs-5"></i>
-                            <div>
-                                <span class="d-block fw-bold">Tanggal Sign</span>
-                                <small class="text-muted" style="font-size: 10px;">Otomatis tanggal &amp; jam</small>
-                            </div>
-                        </button>
-
-                        <button type="button" class="btn btn-outline-secondary tool-palette-btn" onclick="addTagField('NAME_TITLE')">
-                            <i class="ri-user-star-line fs-5"></i>
-                            <div>
-                                <span class="d-block fw-bold">Nama &amp; Jabatan</span>
-                                <small class="text-muted" style="font-size: 10px;">Otomatis nama penanda tangan</small>
+                                <span class="d-block fw-bold">Tanda Tangan</span>
+                                <small class="text-muted" style="font-size: 10px;">Area tanda tangan pada dokumen</small>
                             </div>
                         </button>
                     </div>
@@ -342,7 +318,7 @@
     }
 
     // Add a new visual tagging box
-    function addTagField(fieldType) {
+    function addTagField(fieldType = 'SIGNATURE') {
         if (!activeSignerKey) {
             alert('Silakan pilih salah satu signer terlebih dahulu.');
             return;
@@ -351,24 +327,15 @@
         const signer = signersList.find(s => s.key === activeSignerKey);
         fieldCounter++;
 
-        // Default dimensions in percentage
-        let widthPct = 22; // 22% of page width
-        let heightPct = 7;  // 7% of page height
-
-        if (fieldType === 'INITIAL_PARAF') {
-            widthPct = 12;
-            heightPct = 6;
-        } else if (fieldType === 'SIGN_DATE' || fieldType === 'NAME_TITLE') {
-            widthPct = 25;
-            heightPct = 4;
-        }
+        const widthPct = 22; // 22% of page width
+        const heightPct = 7; // 7% of page height
 
         const newField = {
             id: 'tag_' + fieldCounter,
             signer_key: signer.key,
             user_id: signer.user_id,
             signer_name: signer.name,
-            field_type: fieldType,
+            field_type: 'SIGNATURE',
             page_number: pageNum,
             x_percent: 38, // Center initially
             y_percent: 45,
@@ -408,10 +375,7 @@
             box.style.width = (f.width_percent / 100 * wrapperWidth) + 'px';
             box.style.height = (f.height_percent / 100 * wrapperHeight) + 'px';
 
-            let typeLabel = 'Tanda Tangan';
-            if (f.field_type === 'INITIAL_PARAF') typeLabel = 'Paraf';
-            if (f.field_type === 'SIGN_DATE') typeLabel = 'Tanggal Sign';
-            if (f.field_type === 'NAME_TITLE') typeLabel = 'Nama & Jabatan';
+            const typeLabel = 'Tanda Tangan';
 
             box.innerHTML = `
                 <div class="tag-delete-btn" onclick="event.stopPropagation(); removeTagField('${f.id}')" title="Hapus">&times;</div>

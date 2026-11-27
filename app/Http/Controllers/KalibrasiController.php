@@ -62,12 +62,12 @@ class KalibrasiController extends Controller
             }
         }
 
-        // Sort by next calibration date nearest (ASC)
+        // Sort by next calibration date nearest (ASC), keeping unscheduled nulls last
         $perPage = (int) $request->input('per_page', 25);
         if (!in_array($perPage, [10, 25, 50, 100])) {
             $perPage = 25;
         }
-        $tools = $query->orderBy('next_calibration_date', 'asc')->paginate($perPage)->withQueryString();
+        $tools = $query->orderByRaw('next_calibration_date IS NULL ASC, next_calibration_date ASC')->paginate($perPage)->withQueryString();
 
         // Summary counters
         $counts = [

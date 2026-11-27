@@ -18,6 +18,7 @@ use App\Http\Controllers\DepartementController;
 use App\Http\Controllers\PositionController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\VendorController;
+use App\Http\Controllers\AlatUkurController;
 use App\Http\Controllers\KalibrasiController;
 use App\Http\Controllers\DocumentUploadController;
 use App\Http\Controllers\DocumentRequestController;
@@ -157,6 +158,12 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/master-vendor/export', [VendorController::class, 'export'])->name('vendor.export');
     Route::resource('master-vendor', VendorController::class)->names('vendor')->parameters(['master-vendor' => 'vendor']);
     Route::get('/vendors', [VendorController::class, 'index'])->name('vendor.alias');
+});
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/master-alat-ukur/export', [AlatUkurController::class, 'export'])->name('alat-ukur.export');
+    Route::get('/master-alat-ukur/{alatUkur}/photo', [AlatUkurController::class, 'photo'])->name('alat-ukur.photo');
+    Route::resource('master-alat-ukur', AlatUkurController::class)->names('alat-ukur')->parameters(['master-alat-ukur' => 'alatUkur']);
 });
 
 Route::middleware(['auth'])->prefix('kalibrasi')->name('kalibrasi.')->group(function () {

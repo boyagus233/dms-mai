@@ -167,7 +167,7 @@
                   <span class="text-muted">{{ $tool->last_calibration_date ? $tool->last_calibration_date->format('d/m/Y') : '-' }}</span>
                 </td>
                 <td>
-                  <div class="fw-semibold">{{ $tool->next_calibration_date->format('d/m/Y') }}</div>
+                  <div class="fw-semibold">{{ $tool->next_calibration_date ? $tool->next_calibration_date->format('d/m/Y') : '-' }}</div>
                   <span class="badge {{ $meta['badge_cls'] }} mt-1">
                     {{ $meta['label'] }}
                   </span>
@@ -215,7 +215,7 @@
                               <div class="p-3 bg-light rounded border mb-3">
                                 <div><b>Kode:</b> <span class="font-monospace text-primary">{{ $tool->asset_code }}</span></div>
                                 <div><b>Nama:</b> {{ $tool->name }}</div>
-                                <div><b>Jatuh Tempo:</b> {{ $tool->next_calibration_date->format('d/m/Y') }}</div>
+                                <div><b>Jatuh Tempo:</b> {{ $tool->next_calibration_date ? $tool->next_calibration_date->format('d/m/Y') : '-' }}</div>
                               </div>
                               <div class="alert alert-warning d-flex align-items-center py-2 mb-0" role="alert">
                                 <i class="ri-information-line me-2 fs-5"></i>

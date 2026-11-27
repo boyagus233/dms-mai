@@ -36,7 +36,7 @@
       "name": "Master Data",
       "icon": "menu-icon tf-icons ri-server-line",
       "slug": "master-data",
-      "group": "departement.index,position.index,employee.index,vendor.index",
+      "group": "departement.index,position.index,employee.index,vendor.index,alat-ukur.index,alat-ukur.create,alat-ukur.show,alat-ukur.edit",
       "role": "ADM",
       "submenu": [
         {
@@ -58,6 +58,11 @@
           "url": "master-vendor",
           "name": "Vendor",
           "slug": "vendor.index"
+        },
+        {
+          "url": "master-alat-ukur",
+          "name": "Alat Ukur",
+          "slug": "alat-ukur.index"
         }
       ]
     },
@@ -141,9 +146,14 @@
       "name": "Kalibrasi Alat Ukur",
       "icon": "menu-icon tf-icons ri-compass-3-line",
       "slug": "kalibrasi",
-      "group": "kalibrasi.index,kalibrasi.create-internal,kalibrasi.pending-return,kalibrasi.return-form,kalibrasi.approval-queue,kalibrasi.preview,kalibrasi.archive",
+      "group": "alat-ukur.index,alat-ukur.create,alat-ukur.show,alat-ukur.edit,kalibrasi.index,kalibrasi.create-internal,kalibrasi.pending-return,kalibrasi.return-form,kalibrasi.approval-queue,kalibrasi.preview,kalibrasi.archive",
       "role": "EMP",
       "submenu": [
+        {
+          "url": "master-alat-ukur",
+          "name": "Master Alat Ukur",
+          "slug": "alat-ukur.index"
+        },
         {
           "url": "kalibrasi",
           "name": "Perlu Kalibrasi",
